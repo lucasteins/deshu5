@@ -1,0 +1,9 @@
+{
+  "_note": "演示用更紧的配额（QA 800 / 错题 400 / 码值 1600 / 预算 9800）。已知预算下界风险：B/C 两轨独立证明 PROMPT_BUDGET 低于 ~10000 会整段裁掉错题集/QA 参考段，准确率真实代价 -0.06~-0.11（见 reports/summary-final.md）；本预设仅用于观察 token 节省与伤分量级的对比实验，不建议生产使用。",
+  "prompt": {
+    "budget": 9800,
+    "code_value_max": 1600,
+    "qa_max": 800,
+    "error_max": 400
+  }
+}

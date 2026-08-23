@@ -1,0 +1,3 @@
+{
+  "_note": "当前生产行为（merged 调优态）。本文件不写任何配置键——全部键继承 workflow.engine.DEFAULTS（逐键等于 config.py/代码现值：locate 通道关闭、草稿直出双守门、修复 2 轮、PROMPT_BUDGET=10500、分段配额 2000/1000/600/30/3、RAG_TOP_K=5、thinking=true、max_tokens=8000、三兜底全开）。DEFAULTS 经 getattr(config,...) 取值，保留环境变量覆盖语义，与改动前代码逐点等价。"
+}

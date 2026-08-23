@@ -1,0 +1,8 @@
+flask>=3.0.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+jieba>=0.42.1
+pymysql>=1.1.0
+openpyxl>=3.1.0
+pandas>=2.0.0
+xlrd>=2.0.1

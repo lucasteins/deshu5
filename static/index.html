@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能问数训练系统</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="container">
+    <!-- 导航栏 -->
+    <nav class="nav-bar">
+        <div class="nav-brand">智能问数训练系统</div>
+        <div class="nav-tabs">
+            <a href="#" class="nav-item active" data-mode="training" onclick="switchMode('training')">训练模式</a>
+            <a href="#" class="nav-item" data-mode="qa" onclick="switchMode('qa')">智能问答</a>
+            <a href="#" class="nav-item" data-mode="qa-lib" onclick="switchMode('qa-lib')">问答对库</a>
+            <a href="#" class="nav-item" data-mode="errors" onclick="switchMode('errors')">错题集</a>
+            <a href="#" class="nav-item" data-mode="stats" onclick="switchMode('stats')">统计看板</a>
+            <a href="#" class="nav-item" data-mode="resource" onclick="switchMode('resource')">数据资源</a>
+            <a href="#" class="nav-item" data-mode="provision" onclick="switchMode('provision')">素材提资</a>
+        </div>
+        <button class="settings-btn" id="settings-btn" onclick="openSettings()" title="设置">⚙ 设置</button>
+    </nav>
+
+    <!-- 训练模式 -->
+    <section id="mode-training" class="mode-section active">
+        <!-- 悬浮面板：训练流程 + 生成上下文 -->
+        <div class="float-wrap">
+            <aside class="flow-rail">
+                <div class="rail-title">训练流程</div>
+                <div class="flow-step active" id="flow-step-1">
+                    <span class="flow-num">1</span>
+                    <div class="flow-body">
+                        <div class="flow-title">出题</div>
+                        <div class="flow-meta">
+                            <span class="difficulty-badge" id="difficulty-badge">难度: 进阶题</span>
+                            <span class="timing-badge" id="training-timing-badge" style="display:none"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flow-step" id="flow-step-2">
+                    <span class="flow-num">2</span>
+                    <div class="flow-body"><div class="flow-title">合理性评价</div></div>
+                </div>
+                <div class="flow-step" id="flow-step-3">
+                    <span class="flow-num">3</span>
+                    <div class="flow-body"><div class="flow-title">SQL 生成</div></div>
+                </div>
+                <div class="flow-step" id="flow-step-4">
+                    <span class="flow-num">4</span>
+                    <div class="flow-body">
+                        <div class="flow-title">结果判断</div>
+                        <div class="flow-meta judge-wrap">
+                            <span id="judge-actions" style="display:none;">
+                                <button class="btn btn-correct btn-sm" id="btn-correct" onclick="submitJudgment('正确')" disabled>正确</button>
+                                <button class="btn btn-error btn-sm" id="btn-error" onclick="submitJudgment('错误')" disabled>错误</button>
+                                <button class="btn btn-skip btn-sm" id="btn-skip" onclick="submitJudgment('跳过')" disabled>跳过</button>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="rail-footer">
+                    <button class="btn btn-generate" id="btn-generate" onclick="generateQuestion()">生成题目</button>
+                    <button class="btn btn-secondary" id="btn-generate-sql" onclick="generateTrainingSQL()" style="display:none;">生成 SQL</button>
+                </div>
+            </aside>
+
+            <aside class="context-panel" id="context-panel">
+                <div class="cp-title">生成上下文</div>
+                <div class="cp-empty" id="cp-empty">生成题目并产出 SQL 后，这里展示生成路径、定位数据表、码值命中与耗时分解。</div>
+                <div class="cp-block" id="cp-mode-block" style="display:none;">
+                    <div class="cp-label">生成路径</div>
+                    <span class="cp-mode-badge" id="cp-gen-mode">—</span>
+                </div>
+                <div class="cp-block" id="cp-tables-block" style="display:none;">
+                    <div class="cp-label">定位数据表</div>
+                    <div class="chip-list" id="cp-tables"></div>
+                </div>
+                <div class="cp-block" id="cp-cv-block" style="display:none;">
+                    <div class="cp-label">码值命中</div>
+                    <div class="chip-list" id="cp-code-values"></div>
+                </div>
+                <div class="cp-block" id="cp-timing-block" style="display:none;">
+                    <div class="cp-label">耗时分解</div>
+                    <div class="timing-bars" id="cp-timing"></div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- 主工作区（单列） -->
+        <main class="single-main">
+            <div class="training-card">
+                <div class="question-section">
+                    <h3>业务问题</h3>
+                    <div class="question-text" id="question-text">点击右侧悬浮面板"生成题目"开始训练...</div>
+                </div>
+
+                <!-- 思考过程：实时输出生成过程（定位表/字段/码值/LLM 调用），固定高度自动滚底 -->
+                <div class="thinking-section" id="training-thinking-section" style="display:none;">
+                    <h3>思考过程</h3>
+                    <div class="thinking-window" id="training-thinking-window"></div>
+                </div>
+
+                <!-- 问题合理性评价 -->
+                <div class="question-evaluation" id="question-evaluation" style="display:none;">
+                    <h3>问题合理性评价</h3>
+                    <p class="hint">请先判断这道业务题是否合理，再生成 SQL 进行训练。</p>
+                    <div class="form-group">
+                        <textarea class="form-textarea" id="question-feedback" placeholder="选填：补充反馈（如问题歧义、无法回答等）" rows="2"></textarea>
+                    </div>
+                    <div class="actions">
+                        <button class="btn btn-correct" id="btn-rate-reasonable" onclick="evaluateQuestion('合理')">合理</button>
+                        <button class="btn btn-error" id="btn-rate-unreasonable" onclick="evaluateQuestion('不合理')">不合理</button>
+                    </div>
+                </div>
+
+                <div class="sql-section" id="training-sql-section" style="display:none;">
+                    <h3>生成的 SQL <button class="btn-toggle-sql" id="btn-toggle-training-sql" onclick="toggleTrainingSQL()" style="display:none;font-size:12px;padding:2px 8px;margin-left:10px;">查看原始SQL</button></h3>
+                    <pre class="sql-code" id="generated-sql">-- 等待生成...</pre>
+                    <pre class="sql-code raw-sql" id="generated-sql-raw" style="display:none;color:#666;font-size:0.9em;"></pre>
+                </div>
+
+                <div class="result-section" id="training-result-section" style="display:none;">
+                    <h3>执行结果预览</h3>
+                    <div class="result-table" id="result-preview">
+                        <p class="placeholder">等待生成...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </section>
+
+    <!-- 智能问答模式 -->
+    <section id="mode-qa" class="mode-section">
+        <!-- 悬浮面板：生成流程 + 生成上下文 -->
+        <div class="float-wrap">
+            <aside class="flow-rail">
+                <div class="rail-title">生成流程</div>
+                <div class="step flow-step" id="step-rag">
+                    <span class="step-icon">1</span>
+                    <div class="flow-body">
+                        <span class="step-name flow-title">RAG 检索</span>
+                        <span class="step-status" id="step-rag-status">等待中</span>
+                    </div>
+                </div>
+                <div class="step flow-step" id="step-schema">
+                    <span class="step-icon">2</span>
+                    <div class="flow-body">
+                        <span class="step-name flow-title">上下文组装</span>
+                        <span class="step-status" id="step-schema-status">等待中</span>
+                    </div>
+                </div>
+                <div class="step flow-step" id="step-llm">
+                    <span class="step-icon">3</span>
+                    <div class="flow-body">
+                        <span class="step-name flow-title">LLM 生成</span>
+                        <span class="step-status" id="step-llm-status">等待中</span>
+                    </div>
+                </div>
+                <div class="step flow-step" id="step-execute">
+                    <span class="step-icon">4</span>
+                    <div class="flow-body">
+                        <span class="step-name flow-title">执行验证</span>
+                        <span class="step-status" id="step-execute-status">等待中</span>
+                    </div>
+                </div>
+                <div class="step flow-step" id="step-review">
+                    <span class="step-icon">5</span>
+                    <div class="flow-body">
+                        <span class="step-name flow-title">错题集审查</span>
+                        <span class="step-status" id="step-review-status">等待中</span>
+                    </div>
+                </div>
+                <div class="rail-footer">
+                    <span class="hint" style="margin:0">Ctrl+Enter 快捷生成</span>
+                </div>
+            </aside>
+
+            <aside class="context-panel" id="qa-context-panel">
+                <div class="cp-title">生成上下文</div>
+                <div class="cp-empty" id="qa-cp-empty">提问并生成 SQL 后，这里展示生成路径、定位数据表、码值命中与耗时分解。</div>
+                <div class="cp-block" id="qa-cp-mode-block" style="display:none;">
+                    <div class="cp-label">生成路径</div>
+                    <span class="cp-mode-badge" id="qa-cp-gen-mode">—</span>
+                </div>
+                <div class="cp-block" id="qa-cp-tables-block" style="display:none;">
+                    <div class="cp-label">定位数据表</div>
+                    <div class="chip-list" id="qa-cp-tables"></div>
+                </div>
+                <div class="cp-block" id="qa-cp-cv-block" style="display:none;">
+                    <div class="cp-label">码值命中</div>
+                    <div class="chip-list" id="qa-cp-code-values"></div>
+                </div>
+                <div class="cp-block" id="qa-cp-timing-block" style="display:none;">
+                    <div class="cp-label">耗时分解</div>
+                    <div class="timing-bars" id="qa-cp-timing"></div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- 主工作区（单列） -->
+        <main class="single-main">
+            <div class="qa-card qa-input-sticky">
+                <div class="input-section qa-input-row">
+                    <textarea class="question-input" id="qa-question-input" 
+                        placeholder="请输入业务问题，例如：查询某管理单位下所有高压客户的总用电量（Ctrl+Enter 生成）"></textarea>
+                    <button class="btn btn-generate" onclick="generateSQLFromQuestion()">生成 SQL</button>
+                </div>
+            </div>
+
+            <div class="qa-card">
+                <!-- 思考过程：实时输出生成过程（定位表/字段/码值/LLM 调用），固定高度自动滚底 -->
+                <div class="thinking-section" id="qa-thinking-section" style="display:none">
+                    <h3>思考过程</h3>
+                    <div class="thinking-window" id="qa-thinking-window"></div>
+                </div>
+
+                <!-- 生成的 SQL -->
+                <div class="sql-output" id="qa-sql-output" style="display:none">
+                    <h3>生成的 SQL
+                        <button class="btn-toggle-sql" id="btn-toggle-qa-sql" onclick="toggleQaSQL()" style="display:none;font-size:12px;padding:2px 8px;margin-left:10px;">查看原始SQL</button>
+                        <span class="timing-badge-inline" id="qa-timing-badge" style="display:none"></span>
+                        <span class="cp-mode-badge" id="qa-gen-mode" style="display:none"></span>
+                    </h3>
+                    <pre class="sql-code" id="qa-generated-sql"></pre>
+                    <pre class="sql-code raw-sql" id="qa-generated-sql-raw" style="display:none;color:#666;font-size:0.9em;"></pre>
+                    <div class="review-status" id="review-status"></div>
+                    <div class="qa-actions" id="qa-actions" style="display:none">
+                        <button class="btn btn-correct btn-sm" onclick="saveQA()">保存为问答对</button>
+                        <button class="btn btn-error btn-sm" onclick="feedbackError()">反馈错误</button>
+                    </div>
+                </div>
+
+                <!-- 执行结果 -->
+                <div class="result-output" id="qa-result-output" style="display:none">
+                    <h3>执行结果</h3>
+                    <div class="result-table" id="qa-result-table"></div>
+                </div>
+
+                <!-- 参考问答对：折叠抽屉 -->
+                <details class="pairs-drawer" id="rag-pairs" style="display:none">
+                    <summary>参考问答对（RAG 检索）<span class="pairs-count" id="pairs-count"></span></summary>
+                    <div class="pairs-list" id="pairs-list"></div>
+                </details>
+            </div>
+        </main>
+        <!-- 生成过程（隐藏占位，保持 JS 引用） -->
+        <div class="generation-process" id="generation-process" style="display:none"></div>
+    </section>
+
+    <!-- 问答对库 -->
+    <section id="mode-qa-lib" class="mode-section">
+        <div class="qa-lib-card">
+            <div class="filter-bar">
+                <h3>问答对库</h3>
+                <div class="filter-controls">
+                    <input type="text" class="search-input" id="qa-lib-search-input" 
+                        placeholder="输入关键词搜索问答对（语义匹配）" 
+                        onkeydown="if(event.key==='Enter')searchQALib()">
+                    <button class="btn btn-search" onclick="searchQALib()">搜索</button>
+                    <button class="btn btn-secondary" onclick="clearQALibSearch()">重置</button>
+                    <select class="filter-select" id="qa-lib-difficulty" onchange="loadQALibList()">
+                        <option value="">全部难度</option>
+                        <option value="基础题">基础题</option>
+                        <option value="进阶题">进阶题</option>
+                        <option value="挑战题">挑战题</option>
+                    </select>
+                </div>
+            </div>
+            <div class="search-result-info" id="qa-lib-search-info" style="display:none"></div>
+            <div class="qa-lib-list" id="qa-lib-list"></div>
+            <div class="pagination" id="qa-lib-pagination"></div>
+        </div>
+    </section>
+
+    <!-- 错题集 -->
+    <section id="mode-errors" class="mode-section">
+        <div class="errors-card">
+            <div class="filter-bar">
+                <h3>错题集</h3>
+                <div class="filter-controls">
+                    <input type="text" class="search-input" id="error-search-input" 
+                        placeholder="输入关键词搜索错题（语义匹配）" 
+                        onkeydown="if(event.key==='Enter')searchErrors()">
+                    <button class="btn btn-search" onclick="searchErrors()">搜索</button>
+                    <button class="btn btn-secondary" onclick="clearErrorSearch()">重置</button>
+                    <select class="filter-select" id="error-filter" onchange="loadErrorList()">
+                        <option value="">全部类型</option>
+                        <option value="表选择错误">表选择错误</option>
+                        <option value="字段选择错误">字段选择错误</option>
+                        <option value="关联条件错误">关联条件错误</option>
+                        <option value="WHERE条件错误">WHERE条件错误</option>
+                        <option value="聚合方式错误">聚合方式错误</option>
+                        <option value="排序/分组错误">排序/分组错误</option>
+                        <option value="其他">其他</option>
+                    </select>
+                    <select class="filter-select" id="error-resolved-filter" onchange="loadErrorList()">
+                        <option value="">全部状态</option>
+                        <option value="0">待修复</option>
+                        <option value="1">已修复</option>
+                    </select>
+                </div>
+            </div>
+            <div class="search-result-info" id="search-result-info" style="display:none"></div>
+            <div class="errors-list" id="errors-list"></div>
+            <div class="pagination" id="errors-pagination"></div>
+        </div>
+    </section>
+
+    <!-- 统计看板 -->
+    <section id="mode-stats" class="mode-section">
+        <div class="stats-card">
+            <!-- 子页签 -->
+            <div class="sub-tabs">
+                <a href="#" class="sub-tab active" data-stab="basic" onclick="switchStatsTab('basic');return false;">基础数据</a>
+                <a href="#" class="sub-tab" data-stab="kb" onclick="switchStatsTab('kb');return false;">知识库</a>
+                <a href="#" class="sub-tab" data-stab="workflow" onclick="switchStatsTab('workflow');return false;">工作流运行</a>
+            </div>
+
+            <!-- 页签一：基础数据 -->
+            <div class="stats-tab active" id="stab-basic">
+                <div class="stats-grid">
+                    <div class="stat-box stat-clickable" onclick="drillResource('catalog')" title="点击查看数据资源目录">
+                        <div class="stat-number" id="stat-tables">0</div>
+                        <div class="stat-label">数据表数 <span class="stat-arrow">→</span></div>
+                    </div>
+                    <div class="stat-box stat-clickable" onclick="drillResource('catalog')" title="点击查看数据资源目录">
+                        <div class="stat-number" id="stat-columns">0</div>
+                        <div class="stat-label">字段数 <span class="stat-arrow">→</span></div>
+                    </div>
+                    <div class="stat-box stat-clickable" onclick="drillResource('graph')" title="点击查看关系图谱">
+                        <div class="stat-number" id="stat-relationships">0</div>
+                        <div class="stat-label">主外键关系数 <span class="stat-arrow">→</span></div>
+                    </div>
+                    <div class="stat-box stat-clickable" onclick="drillResource('code')" title="点击查看码值库">
+                        <div class="stat-number" id="stat-code-domains">0</div>
+                        <div class="stat-label">码值域数 <span class="stat-arrow">→</span></div>
+                    </div>
+                    <div class="stat-box stat-clickable" onclick="drillResource('code')" title="点击查看码值库">
+                        <div class="stat-number" id="stat-code-items">0</div>
+                        <div class="stat-label">码值明细数 <span class="stat-arrow">→</span></div>
+                    </div>
+                    <div class="stat-box stat-clickable" onclick="switchMode('qa-lib')" title="点击查看问答对库">
+                        <div class="stat-number" id="stat-qa-total">0</div>
+                        <div class="stat-label">问答对总数 <span class="stat-arrow">→</span></div>
+                    </div>
+                </div>
+                <div class="chart-grid">
+                    <div class="chart-section">
+                        <h3>难度分布</h3>
+                        <div class="error-type-chart" id="diff-dist-chart"></div>
+                    </div>
+                    <div class="chart-section">
+                        <h3>来源分布</h3>
+                        <div class="error-type-chart" id="source-dist-chart"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 页签二：知识库 -->
+            <div class="stats-tab" id="stab-kb">
+                <div class="stats-grid">
+                    <div class="stat-box stat-clickable" onclick="switchMode('qa-lib')" title="点击查看问答对库">
+                        <div class="stat-number" id="stat-kb-qa-total">0</div>
+                        <div class="stat-label">问答对总数 <span class="stat-arrow">→</span></div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-qa-usable">0</div>
+                        <div class="stat-label">可用问答对</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-qa-pending">0</div>
+                        <div class="stat-label">待评价</div>
+                    </div>
+                    <div class="stat-box stat-clickable" onclick="switchMode('errors')" title="点击查看错题集">
+                        <div class="stat-number" id="stat-error-total">0</div>
+                        <div class="stat-label">错题总数 <span class="stat-arrow">→</span></div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-error-resolved">0</div>
+                        <div class="stat-label">已修复</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-correct-rate">0%</div>
+                        <div class="stat-label">正确率</div>
+                    </div>
+                </div>
+                <div class="chart-grid">
+                    <div class="chart-section">
+                        <h3>错误类型分布</h3>
+                        <div class="error-type-chart" id="error-type-chart"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 页签三：工作流运行 -->
+            <div class="stats-tab" id="stab-workflow">
+                <div class="gen-health" id="gen-health">
+                    <div class="gen-health-item">
+                        <span class="gen-health-val" id="health-latency">—</span>
+                        <span class="gen-health-label">平均生成耗时</span>
+                    </div>
+                    <div class="gen-health-item">
+                        <span class="gen-health-val" id="health-attempts">—</span>
+                        <span class="gen-health-label">平均尝试次数</span>
+                    </div>
+                    <div class="gen-health-item">
+                        <span class="gen-health-val" id="health-exec-rate">—</span>
+                        <span class="gen-health-label">执行成功率</span>
+                    </div>
+                    <div class="gen-health-item stat-clickable" onclick="scrollToGenLogs()" title="查看运行日志">
+                        <span class="gen-health-val" id="health-gen-total">—</span>
+                        <span class="gen-health-label">生成总次数 <span class="stat-arrow">→</span></span>
+                    </div>
+                </div>
+                <div class="chart-grid">
+                    <div class="chart-section">
+                        <h3>生成判定分布</h3>
+                        <div class="error-type-chart" id="judgment-dist-chart"></div>
+                    </div>
+                </div>
+
+                <!-- 运行日志 -->
+                <div class="chart-section" id="gen-logs-section">
+                    <h3>运行日志</h3>
+                    <div class="gen-logs-list" id="gen-logs-list"></div>
+                    <div class="pagination" id="gen-logs-pagination"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 数据资源 -->
+    <section id="mode-resource" class="mode-section">
+        <div class="stats-card">
+            <!-- 子页签 -->
+            <div class="sub-tabs">
+                <a href="#" class="sub-tab active" data-rtab="catalog" onclick="switchResourceTab('catalog');return false;">目录模式</a>
+                <a href="#" class="sub-tab" data-rtab="graph" onclick="switchResourceTab('graph');return false;">图谱模式</a>
+                <a href="#" class="sub-tab" data-rtab="code" onclick="switchResourceTab('code');return false;">码值库</a>
+                <a href="#" class="sub-tab" data-rtab="admin" onclick="switchResourceTab('admin');return false;">资源管理</a>
+            </div>
+
+            <!-- 目录模式 -->
+            <div class="stats-tab active" id="rtab-catalog">
+                <div class="filter-bar">
+                    <div class="filter-controls">
+                        <input type="text" class="search-input" id="res-search"
+                            placeholder="搜索表名或业务注释"
+                            oninput="renderCatalog()">
+                        <select class="filter-select" id="res-layer" onchange="renderCatalog()">
+                            <option value="">全部层级</option>
+                            <option value="dim">维表 dim</option>
+                            <option value="dwd">事实表 dwd</option>
+                        </select>
+                        <span class="hint" id="res-count" style="margin:0"></span>
+                    </div>
+                </div>
+                <div class="catalog-grid" id="catalog-grid"></div>
+            </div>
+
+            <!-- 图谱模式 -->
+            <div class="stats-tab" id="rtab-graph">
+                <div class="graph-toolbar">
+                    <span class="lg"><span class="sw sw-dim"></span>维表 dim</span>
+                    <span class="lg"><span class="sw sw-dwd"></span>事实表 dwd</span>
+                    <input type="text" id="graph-search" placeholder="搜索表（表名/注释）" list="graph-nl" oninput="graphSearch()">
+                    <datalist id="graph-nl"></datalist>
+                    <input type="text" id="graph-from" placeholder="起点表" list="graph-nl">
+                    <input type="text" id="graph-to" placeholder="终点表" list="graph-nl">
+                    <button class="btn btn-sm btn-primary" onclick="graphPath()">最短路</button>
+                    <button class="btn btn-sm btn-secondary" onclick="graphAutoLayout()">自动布局</button>
+                    <button class="btn btn-sm btn-secondary" onclick="graphReset()">重置</button>
+                    <span class="hint" id="graph-res" style="margin:0"></span>
+                </div>
+                <div class="graph-wrap">
+                    <canvas id="graph-canvas"></canvas>
+                    <div id="graph-tip"></div>
+                    <div id="graph-sql" style="display:none"></div>
+                </div>
+            </div>
+
+            <!-- 码值库 -->
+            <div class="stats-tab" id="rtab-code">
+                <div class="filter-bar">
+                    <div class="filter-controls">
+                        <input type="text" class="search-input" id="code-search"
+                            placeholder="搜索码值域（中文名/英文名/业务域）"
+                            oninput="renderCodeCatalog()">
+                        <span class="hint" id="code-count" style="margin:0"></span>
+                    </div>
+                </div>
+                <div class="code-catalog" id="code-catalog"></div>
+            </div>
+
+            <!-- 资源管理（P2：通用资源编辑器，基于 /api/resources + entry_schema） -->
+            <div class="stats-tab" id="rtab-admin">
+                <div class="filter-bar">
+                    <div class="filter-controls">
+                        <select class="filter-select" id="res-admin-type" onchange="onResAdminTypeChange()"></select>
+                        <input type="text" class="search-input" id="res-admin-search"
+                            placeholder="搜索（名称/内容子串）" oninput="resAdminSearch()">
+                        <button class="btn btn-sm btn-primary" id="res-admin-new" onclick="resAdminNew()">新建</button>
+                        <button class="btn btn-sm btn-secondary" onclick="resAdminDownloadTemplate()">下载模板</button>
+                        <button class="btn btn-sm btn-secondary" id="res-admin-import-btn"
+                            onclick="document.getElementById('res-admin-file').click()">导入</button>
+                        <input type="file" id="res-admin-file" accept=".json,.csv,.xlsx" style="display:none"
+                            onchange="resAdminImport(this)">
+                        <span class="hint" id="res-admin-count" style="margin:0"></span>
+                    </div>
+                </div>
+                <div class="hint" id="res-admin-note" style="margin:2px 0 8px"></div>
+                <div id="res-admin-import-result"></div>
+                <div id="res-admin-table"></div>
+                <div class="filter-bar" style="margin-top:8px">
+                    <div class="filter-controls">
+                        <button class="btn btn-sm btn-secondary" onclick="resAdminPage(-1)">上一页</button>
+                        <span class="hint" id="res-admin-page" style="margin:0"></span>
+                        <button class="btn btn-sm btn-secondary" onclick="resAdminPage(1)">下一页</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 表详情抽屉（目录/图谱共用） -->
+        <aside class="detail-drawer" id="table-detail-drawer" style="display:none">
+            <div class="drawer-header">
+                <div>
+                    <div class="drawer-title" id="drawer-comment">—</div>
+                    <div class="drawer-sub" id="drawer-table">—</div>
+                </div>
+                <span class="modal-close" onclick="closeTableDetail()">&times;</span>
+            </div>
+            <div class="drawer-body" id="drawer-body"></div>
+        </aside>
+    </section>
+</div>
+
+<!-- 资源管理通用编辑弹窗（P2，表单按 entry_schema 动态生成） -->
+<div class="modal" id="res-admin-modal" style="display:none">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <h3 id="res-admin-modal-title">编辑</h3>
+            <span class="modal-close" onclick="closeResAdminModal()">&times;</span>
+        </div>
+        <div class="modal-body" id="res-admin-form"></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeResAdminModal()">取消</button>
+            <button class="btn btn-primary" onclick="resAdminSave()">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- 错误反馈对话框 -->
+<div class="modal" id="error-modal" style="display:none">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>错误分析</h3>
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>错误维度（可多选）</label>
+                <div class="error-dimensions">
+                    <label class="checkbox-label"><input type="checkbox" id="err-dim-table" value="1"> 表选择错误</label>
+                    <label class="checkbox-label"><input type="checkbox" id="err-dim-field" value="1"> 字段选择错误</label>
+                    <label class="checkbox-label"><input type="checkbox" id="err-dim-join" value="1"> JOIN路径错误</label>
+                    <label class="checkbox-label"><input type="checkbox" id="err-dim-where" value="1"> WHERE条件错误</label>
+                    <label class="checkbox-label"><input type="checkbox" id="err-dim-agg" value="1"> 聚合/分组错误</label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>正确的SQL（可选）</label>
+                <textarea class="form-textarea" id="correct-sql" placeholder="请提供您认为正确的SQL..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>其他反馈</label>
+                <textarea class="form-textarea" id="error-feedback" placeholder="请描述错误原因..."></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" onclick="submitErrorRecord()">提交记录</button>
+            <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑错题对话框 -->
+<div class="modal" id="edit-error-modal" style="display:none">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <h3>编辑错题</h3>
+            <span class="modal-close" onclick="closeEditModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="edit-error-id">
+            <div class="form-group">
+                <label>业务问题</label>
+                <input type="text" class="form-input" id="edit-question" placeholder="业务问题">
+            </div>
+            <div class="form-group">
+                <label>错误SQL</label>
+                <textarea class="form-textarea" id="edit-error-sql" rows="3" placeholder="错误的SQL"></textarea>
+            </div>
+            <div class="form-group">
+                <label>正确SQL</label>
+                <textarea class="form-textarea" id="edit-correct-sql" rows="3" placeholder="正确的SQL"></textarea>
+            </div>
+            <div class="form-group">
+                <label>错误类型</label>
+                <select class="form-select" id="edit-error-type">
+                    <option value="表选择错误">表选择错误</option>
+                    <option value="字段选择错误">字段选择错误</option>
+                    <option value="关联条件错误">关联条件错误</option>
+                    <option value="WHERE条件错误">WHERE条件错误</option>
+                    <option value="聚合方式错误">聚合方式错误</option>
+                    <option value="排序/分组错误">排序/分组错误</option>
+                    <option value="其他">其他</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>错误分析</label>
+                <textarea class="form-textarea" id="edit-error-analysis" rows="3" placeholder="错误分析"></textarea>
+            </div>
+            <div class="form-group">
+                <label>SQL技巧</label>
+                <textarea class="form-textarea" id="edit-sql-tips" rows="3" placeholder="SQL技巧"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="saveErrorEdit()">保存修改</button>
+            <button class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑问答对对话框 -->
+<div class="modal" id="edit-qa-modal" style="display:none">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <h3>编辑问答对</h3>
+            <span class="modal-close" onclick="closeQaEditModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="edit-qa-id">
+            <div class="form-group">
+                <label>业务问题</label>
+                <input type="text" class="form-input" id="edit-qa-question" placeholder="业务问题">
+            </div>
+            <div class="form-group">
+                <label>标准 SQL</label>
+                <textarea class="form-textarea" id="edit-qa-sql" rows="4" placeholder="标准SQL"></textarea>
+            </div>
+            <div class="form-group">
+                <label>难度</label>
+                <select class="form-select" id="edit-qa-difficulty">
+                    <option value="基础题">基础题</option>
+                    <option value="进阶题">进阶题</option>
+                    <option value="挑战题">挑战题</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>来源</label>
+                <input type="text" class="form-input" id="edit-qa-source" placeholder="来源" readonly>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="saveQaEdit()">保存修改</button>
+            <button class="btn btn-secondary" onclick="closeQaEditModal()">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 设置模态框：数据库配置 + LLM API 配置 -->
+<div class="modal" id="settings-modal" style="display:none">
+    <div class="modal-content" style="max-width: 560px;">
+        <div class="modal-header">
+            <h3>设置 · 数据库 / LLM 配置</h3>
+            <span class="modal-close" onclick="closeSettings()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="settings-status" id="db-settings-status">数据库：加载中…</div>
+            <div class="form-group">
+                <label>数据库档位（切换后缓存自动重载，无需重启）</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <select class="form-select" id="db-profile-select" style="flex:1;"></select>
+                    <button class="btn btn-secondary btn-sm" onclick="switchDbProfile()" id="db-profile-btn">切换</button>
+                </div>
+                <div style="font-size:12px;color:#666;margin-top:4px;" id="db-profile-note"></div>
+            </div>
+            <div class="form-group">
+                <label>MySQL 主机</label>
+                <input type="text" class="form-input" id="db-settings-host" placeholder="localhost">
+            </div>
+            <div class="form-group">
+                <label>端口 / 用户名</label>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" class="form-input" id="db-settings-port" placeholder="3306" style="flex:1;">
+                    <input type="text" class="form-input" id="db-settings-user" placeholder="root" style="flex:1;">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>密码（留空表示沿用当前配置）</label>
+                <input type="password" class="form-input" id="db-settings-password" placeholder="留空表示不修改" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <button class="btn btn-secondary btn-sm" onclick="testDbConnection()" id="db-test-btn">测试数据库连接</button>
+                <span class="settings-test-result" id="db-test-result" style="margin-left:8px;"></span>
+            </div>
+            <div id="db-databases-status" style="font-size:12px;color:#666;margin-bottom:4px;"></div>
+            <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0;">
+            <div class="settings-status" id="settings-status">当前生效：-</div>
+            <div class="form-group">
+                <label>服务商</label>
+                <select class="form-select" id="settings-provider" onchange="onSettingsProviderChange()">
+                    <option value="kimi">Kimi（K2.7 Code）</option>
+                    <option value="deepseek">DeepSeek</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>API 地址</label>
+                <input type="text" class="form-input" id="settings-api-url" placeholder="https://api.deepseek.com">
+            </div>
+            <div class="form-group">
+                <label>API Key</label>
+                <input type="password" class="form-input" id="settings-api-key" placeholder="留空表示不修改" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label>模型</label>
+                <input type="text" class="form-input" id="settings-model" placeholder="deepseek-v4-pro">
+            </div>
+            <div class="form-group">
+                <label>Temperature（可选，留空用服务端默认；Kimi 由端点强制忽略此项）</label>
+                <input type="text" class="form-input" id="settings-temperature" placeholder="如 0.2">
+            </div>
+            <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0;">
+            <div class="form-group">
+                <label>SQL 生成工作流预设（切换即时生效，无需重启）</label>
+                <select class="form-select" id="settings-workflow" onchange="onWorkflowChange()">
+                </select>
+            </div>
+            <div class="settings-status" id="settings-workflow-note"></div>
+            <div class="settings-test-result" id="settings-test-result"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="testSettingsConnection()" id="settings-test-btn">测试连接</button>
+            <button class="btn btn-primary" onclick="saveSettings()" id="settings-save-btn">保存并启用</button>
+            <button class="btn btn-secondary" onclick="closeSettings()">取消</button>
+        </div>
+    </div>
+</div>
+
+    <!-- 素材提资 -->
+    <section id="mode-provision" class="mode-section">
+        <div class="stats-card">
+            <!-- 步骤条 -->
+            <div class="pv-steps" id="pv-steps">
+                <span class="pv-step active" data-step="1">① 上传解析</span>
+                <span class="pv-step" data-step="2">② 校验与映射预览</span>
+                <span class="pv-step" data-step="3">③ 执行转换</span>
+                <span class="pv-step" data-step="4">④ 人工复核</span>
+            </div>
+
+            <!-- ① 上传卡 -->
+            <div class="pv-block" id="pv-upload-block">
+                <h3>上传素材提资模板（xlsx）</h3>
+                <div class="pv-upload-row">
+                    <input type="file" id="pv-file" accept=".xlsx">
+                    <span class="hint">或</span>
+                    <input type="text" id="pv-path" class="search-input" style="flex:1"
+                           placeholder="服务器路径，如 C:/Users/11051/Desktop/素材提资模板20260820.xlsx">
+                    <button class="btn btn-primary" id="pv-upload-btn" onclick="uploadProvision()">上传解析</button>
+                </div>
+                <div class="hint" id="pv-upload-msg"></div>
+            </div>
+
+            <!-- 校验结果块 -->
+            <div class="pv-block" id="pv-validation-block" style="display:none">
+                <h3>校验结果</h3>
+                <div id="pv-validation-summary"></div>
+                <div id="pv-validation-issues"></div>
+            </div>
+
+            <!-- ② 预览区（按 Sheet 分组，字段级溯源徽标） -->
+            <div class="pv-block" id="pv-preview-block" style="display:none">
+                <h3>映射预览 <span class="hint">（徽标：绿=直接转换 蓝=系统推导 紫=LLM标注 橙=人工标注；绿+蓝页面合并为“直接转换”，点击徽标看溯源）</span></h3>
+                <div class="pv-legend">
+                    <span class="pv-badge pv-direct">直接转换</span>
+                    <span class="pv-badge pv-system">系统推导</span>
+                    <span class="pv-badge pv-llm">LLM标注</span>
+                    <span class="pv-badge pv-manual">人工标注</span>
+                </div>
+                <div id="pv-preview"></div>
+                <button class="btn btn-primary" id="pv-execute-btn" onclick="executeProvision()">执行转换</button>
+            </div>
+
+            <!-- ③ 执行进度块（复用 thinking-window 样式） -->
+            <div class="pv-block" id="pv-execute-block" style="display:none">
+                <h3>执行进度</h3>
+                <div class="thinking-window" id="pv-execute-log" style="display:block;max-height:260px;overflow:auto"></div>
+                <div id="pv-execute-result"></div>
+            </div>
+
+            <!-- ④ 复核队列 -->
+            <div class="pv-block" id="pv-review-block" style="display:none">
+                <h3>人工复核队列（pending）</h3>
+                <div id="pv-review"></div>
+                <button class="btn btn-secondary" id="pv-finish-btn" onclick="finishProvision()">完成本批次</button>
+            </div>
+        </div>
+    </section>
+
+<script src="js/app.js"></script>
+<script src="js/resource.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/provision.js"></script>
+</body>
+</html>

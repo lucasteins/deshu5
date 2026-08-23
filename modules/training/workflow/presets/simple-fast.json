@@ -1,0 +1,6 @@
+{
+  "_note": "轻快取向：模板前置保留，修复 1 轮、RAG top3——简单题为主的场景延迟/成本最低。对照实验用。",
+  "template_first": { "enabled": true },
+  "repair": { "enabled": true, "max_rounds": 1 },
+  "rag": { "top_k": 3 }
+}

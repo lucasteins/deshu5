@@ -1,0 +1,8 @@
+{
+  "_note": "开启 LLM 表定位通道（现值等效旧 config 默认：enabled=true, wait_max=15s, timeout=25s），其余同 default。注意：DeepSeek 等恒推理模型下定位调用中位 40s/p90 116s，schema 阶段长尾显著；Track B 已验证关闭定位准确率无损，本预设用于对比定位通道的真实收益/代价。",
+  "locate": {
+    "enabled": true,
+    "wait_max": 15,
+    "timeout": 25
+  }
+}

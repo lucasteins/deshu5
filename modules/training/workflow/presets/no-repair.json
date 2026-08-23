@@ -1,0 +1,7 @@
+{
+  "_note": "关闭快速修复通道（修复轮数 0），其余同 default。用于量化修复通道对 Execution-Match 的贡献与 token/延迟代价。",
+  "repair": {
+    "enabled": false,
+    "max_rounds": 0
+  }
+}

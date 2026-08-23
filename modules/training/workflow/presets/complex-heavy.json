@@ -1,0 +1,7 @@
+{
+  "_note": "重火力取向：模板前置保留，重开 LLM 表定位（15s 等待硬顶）、修复 3 轮、QA 上下文 1500——攻坚复杂题。对照实验用。",
+  "template_first": { "enabled": true },
+  "locate": { "enabled": true, "wait_max": 15, "timeout": 25 },
+  "repair": { "enabled": true, "max_rounds": 3 },
+  "prompt": { "qa_max": 1500 }
+}

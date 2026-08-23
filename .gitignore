@@ -1,0 +1,15 @@
+# 密钥与环境
+.env
+llm_settings.json
+
+# 运行时产物
+uploads/
+__pycache__/
+*.pyc
+
+# 工作流当前选择（运行时可变）
+modules/training/workflow/current.json
+
+# 数据库档位选择（运行时可变）
+db_profile.json
+.vendor/
