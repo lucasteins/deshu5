@@ -18,7 +18,7 @@ class SchemaLoader:
         
         schema = {}
         with self.db.connect_business() as conn:
-            # 获取所有表（使用 DatabaseManager 的统一方法，兼容 SQLite 和 MySQL）
+            # 获取所有表（information_schema，经 DatabaseManager 统一方法）
             tables = self.db.get_all_tables(conn)
             
             for table in tables:
@@ -29,16 +29,16 @@ class SchemaLoader:
     
     def _load_table_schema(self, conn, table: str) -> Dict[str, Any]:
         """加载单张表的Schema（使用 DatabaseManager 的统一方法）"""
-        # 字段信息（兼容 SQLite 和 MySQL）
+        # 字段信息（information_schema）
         columns = self.db.get_table_columns(conn, table)
         pk_cols = [c['name'] for c in columns if c.get('pk', 0) > 0]
-        
-        # 加载字段中文注释（MySQL 走 information_schema / SQLite 走治理库文档，见 _load_field_comments）
+
+        # 加载字段中文注释（information_schema，经 SchemaPreloader 缓存，见 _load_field_comments）
         field_comments = self._load_field_comments(table)
         for col in columns:
             col['comment'] = field_comments.get(col['name'], '')
-        
-        # 外键信息（兼容 SQLite 和 MySQL）
+
+        # 外键信息（information_schema）
         foreign_keys = self.db.get_foreign_keys(conn, table)
         fk_list = []
         for fk in foreign_keys:
@@ -48,7 +48,7 @@ class SchemaLoader:
                 'to_col': fk['to_col']
             })
         
-        # 索引信息（兼容 SQLite 和 MySQL）
+        # 索引信息（information_schema）
         indexes = self.db.get_table_indexes(conn, table)
         idx_list = []
         for idx in indexes:
@@ -105,24 +105,14 @@ class SchemaLoader:
     def _load_field_comments(self, table: str) -> Dict[str, str]:
         """加载字段中文注释。
 
-        MySQL 模式权威源 = 业务库 information_schema（注释随物理表 COMMENT 落库），
-        经 SchemaPreloader 单例缓存读取，避免逐表重复查询；
-        SQLite 模式保持 governance.schema_column_docs 文档路径不变。
+        权威源 = 业务库 information_schema（注释随物理表 COMMENT 落库），
+        经 SchemaPreloader 单例缓存读取，避免逐表重复查询。
         """
         comments = {}
         try:
-            if self.db.get_dialect() == 'mysql':
-                from core.schema_preloader import SchemaPreloader
-                for col in SchemaPreloader.get_instance().get_columns(table):
-                    comments[col['name']] = col.get('comment') or ''
-            else:
-                with self.db.connect_governance() as gconn:
-                    cursor = gconn.execute(
-                        'SELECT column_name, column_comment FROM schema_column_docs WHERE table_name = ?',
-                        (table,)
-                    )
-                    for row in cursor.fetchall():
-                        comments[row[0]] = row[1] or ''
+            from core.schema_preloader import SchemaPreloader
+            for col in SchemaPreloader.get_instance().get_columns(table):
+                comments[col['name']] = col.get('comment') or ''
         except Exception:
             pass
         return comments

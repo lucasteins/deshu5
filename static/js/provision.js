@@ -143,26 +143,105 @@ async function executeProvision() {
     }
 }
 
+// 当前复核队列条目（供批量同意收集 id）
+let pvReviewItems = [];
+
 async function loadReview(runId) {
     const resp = await fetch(`/api/provision/${runId}/review`);
     const data = await resp.json();
     if (!data.success) { alert('复核队列加载失败：' + (data.error || resp.status)); return; }
     pvShow('pv-review-block');
     const box = document.getElementById('pv-review');
-    if (!data.items.length) {
+    pvReviewItems = data.items || [];
+    if (!pvReviewItems.length) {
         box.innerHTML = '<div class="hint">无待复核记录</div>';
         return;
     }
-    box.innerHTML = '<table class="pv-table"><tr><th>ID</th><th>Sheet</th><th>行</th><th>目标</th><th>字段</th>' +
-        '<th>来源</th><th>值（可编辑）</th><th>操作</th></tr>' +
-        data.items.map(it => `<tr id="pv-rev-${it.id}">
-            <td>${it.id}</td><td>${pvEsc(it.sheet_name)}</td><td>${it.src_row}</td>
-            <td>${pvEsc(it.target_table)}<br><span class="hint">${pvEsc((it.target_key || '').slice(0, 30))}</span></td>
-            <td>${pvEsc(it.field_name)}</td>
-            <td>${pvBadge(it.source_kind, it.source_ref)}</td>
-            <td><input class="pv-value-input" id="pv-val-${it.id}" value="${pvEsc(it.field_value || '')}"></td>
-            <td><button class="btn btn-primary btn-sm" onclick="confirmProv(${it.id})">确认</button></td>
-        </tr>`).join('') + '</table>';
+    // 按复核优先级分组（高→中→低，服务端已排序）
+    const groups = {'高': [], '中': [], '低': []};
+    for (const it of pvReviewItems) (groups[it.priority] || groups['低']).push(it);
+    box.innerHTML = pvRenderPriSection('高', groups['高'], 50) +
+                    pvRenderPriSection('中', groups['中']) +
+                    pvRenderPriSection('低', groups['低']);
+    filterReviewRows();
+}
+
+/** 优先级分组区块：高优先级逐条人工确认（每批最多显示 cap 条）；中/低支持批量同意 */
+function pvRenderPriSection(pri, items, cap) {
+    if (!items.length) return '';
+    const cls = {'高': 'pv-pri-high', '中': 'pv-pri-mid', '低': 'pv-pri-low'}[pri];
+    const shown = cap ? items.slice(0, cap) : items;
+    const batchBtn = (pri === '高') ? '' :
+        ` <button class="btn btn-primary btn-sm" onclick="batchConfirm('${pri}')">批量同意本节（${items.length} 条）</button>`;
+    const capHint = (cap && items.length > cap) ?
+        ` <span class="hint">共 ${items.length} 条，本批显示前 ${cap} 条，处理后可刷新换下一批</span>` : '';
+    const rows = shown.map(it => `<tr id="pv-rev-${it.id}">
+        <td>${it.id}</td><td>${pvEsc(it.sheet_name)}</td><td>${it.src_row}</td>
+        <td>${pvEsc(it.target_table)}<br><span class="hint">${pvEsc((it.target_key || '').slice(0, 40))}</span></td>
+        <td>${pvEsc(it.field_name)}</td>
+        <td class="hint">${pvEsc(it.priority_reason || '')}${(it.source_ref || '').startsWith('冲突') ? '<br>' + pvEsc(it.source_ref) : ''}</td>
+        <td><input class="pv-value-input" id="pv-val-${it.id}" value="${pvEsc(it.field_value || '')}"></td>
+        <td><button class="btn btn-primary btn-sm" onclick="confirmProv(${it.id})">确认</button></td>
+    </tr>`).join('');
+    return `<div class="pv-pri-section">
+        <h4><span class="pv-pri ${cls}">${pri}优先级</span>${items.length} 条${batchBtn}${capHint}</h4>
+        <table class="pv-table"><tr><th>ID</th><th>Sheet</th><th>行</th><th>目标</th><th>字段</th>
+        <th>优先级原因/冲突</th><th>值（可编辑）</th><th>操作</th></tr>${rows}</table>
+    </div>`;
+}
+
+/** 批量同意一个优先级分组（仅中/低；高优先级服务端会拒绝） */
+async function batchConfirm(pri) {
+    const ids = pvReviewItems.filter(it => it.priority === pri).map(it => it.id);
+    if (!ids.length) return;
+    if (!confirm(`确认批量同意「${pri}」优先级的 ${ids.length} 条？\n将按模板值覆盖库内对应字段。`)) return;
+    const resp = await fetch('/api/provision/review/batch-confirm', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids})
+    });
+    const data = await resp.json();
+    if (!data.success) { alert('批量确认失败：' + (data.error || resp.status)); return; }
+    alert(`已确认 ${data.confirmed} 条` +
+        (data.refused && data.refused.length ? `；服务端拒绝 ${data.refused.length} 条（高优先级需逐条确认）` : '') +
+        (data.failed && data.failed.length ? `；失败 ${data.failed.length} 条` : ''));
+    await initProvisionPage();
+}
+
+/** 进入素材提资页：加载有 pending 的历史 run（此前复核队列仅当次执行后可见，历史 pending 无入口） */
+async function initProvisionPage() {
+    try {
+        const resp = await fetch('/api/provision/runs');
+        const data = await resp.json();
+        if (!data.success) return;
+        const withPending = (data.items || []).filter(r => r.pending > 0);
+        const sel = document.getElementById('pv-review-run');
+        if (!sel || !withPending.length) return;
+        sel.innerHTML = withPending.map(r =>
+            `<option value="${pvEsc(r.run_id)}">${pvEsc(r.file_name || '')}｜${pvEsc(r.run_id)}｜待复核 ${r.pending}</option>`
+        ).join('');
+        // 不覆盖正在进行的当次会话（刚执行完的 run 优先保持）
+        if (provisionState.runId && withPending.some(r => r.run_id === provisionState.runId)) {
+            sel.value = provisionState.runId;
+        } else {
+            provisionState.runId = sel.value;
+        }
+        pvShow('pv-review-block');
+        await loadReview(sel.value);
+    } catch (e) { /* 静默：不影响上传/执行主流程 */ }
+}
+
+function onReviewRunChange() {
+    const sel = document.getElementById('pv-review-run');
+    provisionState.runId = sel.value;
+    loadReview(sel.value);
+}
+
+/** 复核队列客户端过滤（目标表/字段/值关键字） */
+function filterReviewRows() {
+    const kw = (document.getElementById('pv-review-filter').value || '').trim().toLowerCase();
+    document.querySelectorAll('#pv-review tr[id^="pv-rev-"]').forEach(tr => {
+        tr.style.display = (!kw || tr.textContent.toLowerCase().includes(kw)) ? '' : 'none';
+    });
 }
 
 async function confirmProv(provId) {

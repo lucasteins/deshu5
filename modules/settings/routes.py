@@ -78,11 +78,11 @@ def _mask(s: str, keep: int = 2) -> str:
 
 
 def _ping_profile(profile: dict) -> dict:
-    """探测某档位三库连通性，返回 {key: True|错误信息}。"""
+    """探测某档位四库连通性，返回 {key: True|错误信息}。"""
     import pymysql
 
     result = {}
-    for key in ('business', 'governance', 'log'):
+    for key in ('business', 'governance', 'log', 'ontology'):
         try:
             conn = pymysql.connect(host=config.MYSQL_HOST, port=config.MYSQL_PORT,
                                    user=config.MYSQL_USER, password=config.MYSQL_PASSWORD,
@@ -97,7 +97,7 @@ def _ping_profile(profile: dict) -> dict:
 
 @bp.route('/db', methods=['GET'])
 def get_db_settings():
-    """当前数据库档位 + 全部档位（生产/暂存）三库连通状态"""
+    """当前数据库档位 + 全部档位（生产/暂存）四库连通状态"""
     from core import db_profile
 
     profiles = []
@@ -106,7 +106,8 @@ def get_db_settings():
         profiles.append({
             'name': p['name'], 'label': p['label'],
             'business': p['business'], 'governance': p['governance'], 'log': p['log'],
-            'connected': all(ping[k] is True for k in ('business', 'governance', 'log')),
+            'ontology': p['ontology'],
+            'connected': all(ping[k] is True for k in ('business', 'governance', 'log', 'ontology')),
             'ping': {k: (True if v is True else str(v)) for k, v in ping.items()},
         })
     cur = db_profile.current()
@@ -123,6 +124,7 @@ def get_db_settings():
             {'key': 'business', 'name': cur['business'], 'desc': '业务库（SQL 只读执行目标）'},
             {'key': 'governance', 'name': cur['governance'], 'desc': '治理库（知识资源/提资溯源）'},
             {'key': 'log', 'name': cur['log'], 'desc': '日志库（运行日志）'},
+            {'key': 'ontology', 'name': cur['ontology'], 'desc': '本体库（本体模型层存储）'},
         ],
     })
 
@@ -155,6 +157,8 @@ def switch_db_profile():
              'error': '' if ping['governance'] is True else str(ping['governance'])},
             {'key': 'log', 'name': cur['log'], 'connected': ping['log'] is True,
              'error': '' if ping['log'] is True else str(ping['log'])},
+            {'key': 'ontology', 'name': cur['ontology'], 'connected': ping['ontology'] is True,
+             'error': '' if ping['ontology'] is True else str(ping['ontology'])},
         ],
     })
 

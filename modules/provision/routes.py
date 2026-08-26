@@ -155,12 +155,48 @@ def provision_execute(run_id):
                     headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
+@bp.route('/api/provision/runs')
+def provision_runs():
+    """历史 run 列表 + 各 run 待复核条数（复核队列下拉用；历史 pending 不再依赖当次会话）。"""
+    with DatabaseManager().connect_governance() as conn:
+        rows = conn.execute('''
+            SELECT r.run_id, r.file_name, r.status, r.created_at,
+                   SUM(CASE WHEN p.review_status = 'pending' THEN 1 ELSE 0 END) AS pending
+            FROM ingest_runs r
+            LEFT JOIN ingest_provenance p ON p.run_id = r.run_id
+            GROUP BY r.run_id, r.file_name, r.status, r.created_at
+            ORDER BY r.created_at DESC
+        ''').fetchall()
+    items = [{'run_id': r[0], 'file_name': r[1], 'status': r[2],
+              'created_at': str(r[3]) if r[3] else None, 'pending': int(r[4] or 0)}
+             for r in rows]
+    return jsonify({'success': True, 'items': items})
+
+
 @bp.route('/api/provision/<run_id>/review')
 def provision_review(run_id):
     """人工复核队列：该 run 的 pending 溯源行。"""
     if not pv.get_run(run_id):
         return jsonify({'success': False, 'error': f'run 不存在: {run_id}'}), 404
     return jsonify({'success': True, 'items': pv.get_review_queue(run_id)})
+
+
+@bp.route('/api/provision/review/batch-confirm', methods=['POST'])
+def provision_review_batch_confirm():
+    """批量复核确认（仅中/低优先级；高优先级服务端拒绝，必须逐条人工确认）。"""
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids') or []
+    if not ids:
+        return jsonify({'success': False, 'error': '未选择记录'}), 400
+    if len(ids) > 2000:
+        return jsonify({'success': False, 'error': f'单批最多 2000 条（本次 {len(ids)}）'}), 400
+    try:
+        result = pv.batch_confirm([int(i) for i in ids])
+        return jsonify({'success': True, **result})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @bp.route('/api/provision/review/<int:prov_id>/confirm', methods=['POST'])

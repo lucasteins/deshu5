@@ -2,7 +2,6 @@
 import re
 import json
 from typing import Dict, List, Optional, Tuple
-import config
 from core.database import DatabaseManager
 
 
@@ -421,9 +420,8 @@ class SQLReviewer:
         issues = []
         sql_upper = sql.upper().strip()
         
-        # 检查是否以 SELECT 开头
-        dialect = getattr(config, 'DB_TYPE', 'sqlite').lower()
-        allowed_prefixes = ['SELECT', 'WITH'] if dialect == 'mysql' else ['SELECT', 'WITH', 'PRAGMA']
+        # 检查是否以 SELECT 开头（MySQL 方言只允许 SELECT / WITH）
+        allowed_prefixes = ['SELECT', 'WITH']
         if not any(sql_upper.startswith(prefix) for prefix in allowed_prefixes):
             issues.append({
                 'level': 'error',

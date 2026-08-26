@@ -20,31 +20,19 @@ from modules.resources.base import ResourceProvider, rows_to_dicts, row_to_dict,
 
 
 def _ensure_table(db=None):
-    """建表（IF NOT EXISTS，双方言）。读取路径首次访问时也会调用，保证任何环境可启动。"""
+    """建表（IF NOT EXISTS，MySQL 方言）。读取路径首次访问时也会调用，保证任何环境可启动。"""
     db = db or DatabaseManager()
     with db.connect_governance() as conn:
-        if db.get_dialect() == 'mysql':
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS keyword_table_map (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    keyword VARCHAR(64),
-                    table_name VARCHAR(128),
-                    enabled TINYINT(1) DEFAULT 1,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE KEY uk_ktm (keyword, table_name)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            ''')
-        else:
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS keyword_table_map (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    keyword VARCHAR(64),
-                    table_name VARCHAR(128),
-                    enabled BOOLEAN DEFAULT 1,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE (keyword, table_name)
-                )
-            ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS keyword_table_map (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                keyword VARCHAR(64),
+                table_name VARCHAR(128),
+                enabled TINYINT(1) DEFAULT 1,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_ktm (keyword, table_name)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ''')
         conn.commit()
 
 

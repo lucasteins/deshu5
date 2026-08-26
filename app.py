@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """智能问数训练系统（deshu5 轻量化重构版）—— 应用入口
 
-架构（四模块 + 公共底座，同一 MySQL 底座）：
-    core/                公共底座：MySQL 连接层 / LLM 配置 / Schema 与 RAG 知识底座
+架构（五模块 + 公共底座，同一 MySQL 底座）：
+    core/                公共底座：MySQL 连接层 / LLM 配置 / Schema 与 RAG 知识底座 / 本体层
     modules/settings/    ① 数据库配置 + LLM 配置
     modules/training/    ② 训练模式 + 智能问答（含 NL2SQL 生成引擎与工作流预设）
     modules/resources/   ③ 数据资源 + 统计看板
     modules/provision/   ④ 素材提资
+    modules/ontology/    ⑤ 本体模型管理面（浏览/导出/漂移检测/变更审批）
 
 启动：python app.py（或 start.bat）
 """
@@ -55,12 +56,14 @@ def create_app() -> Flask:
     from modules.training.routes import bp as training_bp
     from modules.resources.routes import bp as resources_bp
     from modules.provision.routes import bp as provision_bp
+    from modules.ontology.routes import bp as ontology_bp
 
     app.register_blueprint(settings_bp)
     app.register_blueprint(workflows_bp)
     app.register_blueprint(training_bp)
     app.register_blueprint(resources_bp)
     app.register_blueprint(provision_bp)
+    app.register_blueprint(ontology_bp)
 
     # ---- 静态页面与健康检查 ----
     @app.route('/')
@@ -72,7 +75,7 @@ def create_app() -> Flask:
         return jsonify({
             'status': 'ok',
             'version': '5.0.0',
-            'modules': ['settings', 'training', 'resources', 'provision'],
+            'modules': ['settings', 'training', 'resources', 'provision', 'ontology'],
         })
 
     return app

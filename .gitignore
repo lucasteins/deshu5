@@ -13,3 +13,9 @@ modules/training/workflow/current.json
 # 数据库档位选择（运行时可变）
 db_profile.json
 .vendor/
+
+# 本地数据备份（非源码，可能含生产数据，勿上传）
+db/database/*.sql
+db/*.sql
+*.bak.sql
+data/*_bak_*.sql

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """数据库连接档位：生产库 / 暂存库 运行时切换（前端设置页驱动，免重启）
 
-- 生产库：marketing_40 / marketing_governance / marketing_log（config/env 默认）
-- 暂存库：database01 / database01_governance / database01_governance（日志并治理库）
+- 生产库：marketing_40 / marketing_governance / marketing_log / marketing_ontology（config/env 默认）
+- 暂存库：database01 / database01_governance / database01_governance（日志并治理库）/ database01_ontology
 - 持久化：根目录 db_profile.json（gitignore）；环境变量 DB_PROFILE 优先
 - 连接层（core/database.py）在每次建立连接时读取 current()，切换即时生效
 """
@@ -18,12 +18,14 @@ PROFILES = {
         'business': config.MYSQL_DB_BUSINESS,
         'governance': config.MYSQL_DB_GOVERNANCE,
         'log': config.MYSQL_DB_LOG,
+        'ontology': config.MYSQL_DB_ONTOLOGY,
     },
     'staging': {
         'label': '暂存库',
         'business': os.environ.get('STAGING_DB_BUSINESS', 'database01'),
         'governance': os.environ.get('STAGING_DB_GOVERNANCE', 'database01_governance'),
         'log': os.environ.get('STAGING_DB_LOG', 'database01_governance'),
+        'ontology': os.environ.get('STAGING_DB_ONTOLOGY', 'database01_ontology'),
     },
 }
 
@@ -46,7 +48,7 @@ def current_name() -> str:
 
 
 def current() -> dict:
-    """当前档位：{name, label, business, governance, log}"""
+    """当前档位：{name, label, business, governance, log, ontology}"""
     name = current_name()
     return dict(PROFILES[name], name=name)
 
@@ -64,5 +66,6 @@ def switch(name: str) -> dict:
 def list_profiles() -> list:
     """全部档位摘要（供前端展示）。"""
     return [{'name': n, 'label': p['label'],
-             'business': p['business'], 'governance': p['governance'], 'log': p['log']}
+             'business': p['business'], 'governance': p['governance'], 'log': p['log'],
+             'ontology': p['ontology']}
             for n, p in PROFILES.items()]

@@ -1,7 +1,6 @@
 """RAG 检索器：精确匹配 + 相似度匹配 + Schema 感知字段校验"""
 import os
 import sys
-import sqlite3
 import re
 from difflib import SequenceMatcher
 from typing import List, Dict, Tuple, Optional, Set
@@ -31,6 +30,126 @@ def invalidate_code_value_index():
     _CV_INDEX_GEN += 1
 
 
+# 简单中文停用词（模块级，供 extract_keywords 与 RAGRetriever 共用）
+_STOP_WORDS = {
+    '的', '了', '是', '在', '有', '和', '与', '或', '为', '对', '从', '到', '及', '等',
+    '这', '那', '中', '上', '下', '查询', '统计', '获取', '查找', '列出', '所有'
+}
+
+
+def _simple_tokenize(text: str) -> List[str]:
+    """简单分词（jieba 不可用时的回退方案）"""
+    words = re.split(r'[\s,，.。!！?？;:；：\(\)（）]+', text)
+    return [w for w in words if w]
+
+
+def extract_keywords(text: str) -> List[str]:
+    """从文本中提取关键词（去除停用词和短词）。模块级，供本体服务等外部调用方复用。"""
+    if not text:
+        return []
+    words = jieba.lcut(text) if _JIEBA_AVAILABLE else _simple_tokenize(text)
+    keywords = []
+    for word in words:
+        word = word.strip().lower()
+        if len(word) >= 2 and word not in _STOP_WORDS:
+            keywords.append(word)
+    return keywords
+
+
+# 码值反向匹配停用词：通用业务词不参与反向匹配，否则"客户/用电"会灌爆命中列表
+_CV_REVERSE_STOP = {
+    '用电', '客户', '用户', '供电', '电力', '电费', '电量', '单位', '公司',
+    '记录', '数据', '信息', '情况', '业务', '哪些', '哪个', '如何', '怎么',
+    '什么', '是否', '所有', '相关', '查询', '统计', '分析', '多少', '几个'
+}
+
+
+def match_code_value_index(cv_domains: Dict, cv_items: Dict, cv_col_map: Dict,
+                           cv_form_map: Dict, question: str, tables: List[str],
+                           per_domain: int = 8, max_domains: int = 8,
+                           tokenize=None) -> List[Dict]:
+    """码值维度匹配（模块级，RAGRetriever 与本体 OntologyService 共用同一套逻辑、各持索引）。
+
+    通道一（问题→值）：问题中出现的码值名称（如"e户通代扣"）直接命中其域；
+    通道二（表→值域）：定位表中的码值列（如 valid_flag_desc）带上其值域。
+    返回: [{code_name, cn_name, columns, values, matched, form, pairs, total}]
+    """
+    if not cv_domains:
+        return []
+    tokenize = tokenize or extract_keywords
+    hits = {}  # code_name -> {'matched': set()}
+
+    # 通道一：问题子串命中码值名称（长度>=2 避免单字误命中）
+    for code_name, items in cv_items.items():
+        for _, item_name in items:
+            if len(item_name) >= 2 and item_name in question:
+                hits.setdefault(code_name, {'matched': set()})['matched'].add(item_name)
+
+    # 通道一增强：问题分词反向命中长码值名
+    # （如"杭州"命中"国网浙江省电力有限公司杭州供电公司"——码值名未完整出现在问题中，但其片段是问题中的词）
+    try:
+        tokens = [t for t in tokenize(question)
+                  if len(t) >= 2 and t not in _CV_REVERSE_STOP]
+    except Exception:
+        tokens = []
+    if tokens:
+        for code_name, items in cv_items.items():
+            for _, item_name in items:
+                if len(item_name) < 4:
+                    continue
+                for tok in tokens:
+                    if tok in item_name:
+                        hits.setdefault(code_name, {'matched': set()})['matched'].add(item_name)
+                        break
+
+    # 通道二：定位表中的码值列
+    located = set(tables or [])
+    for code_name, cols in cv_col_map.items():
+        if any(t in located for t, _ in cols):
+            hits.setdefault(code_name, {'matched': set()})
+
+    # 排序：有问题命中的域优先，其次按命中数
+    ordered = sorted(hits.items(), key=lambda kv: (not kv[1]['matched'], -len(kv[1]['matched'])))
+    result = []
+    for code_name, info in ordered:
+        dom = cv_domains.get(code_name)
+        if not dom:
+            continue  # 明细表中的孤儿域（code_values 无定义，如 bp_type）跳过
+        items = [name for _, name in cv_items.get(code_name, [])]
+        matched = sorted(info['matched'])
+        # 命中的值排前面，其余按 sort_order 补足 per_domain
+        values = matched + [v for v in items if v not in matched][:max(0, per_domain - len(matched))]
+        values = values[:per_domain]
+        if not values and not matched:
+            continue  # 无值域明细的编码类域（如 mgt_org_code）不展示
+        cols = cv_col_map.get(code_name, [])
+        # 优先展示定位表中的列
+        cols = sorted(cols, key=lambda tc: tc[0] not in located)
+        # 存储形态：取第一个已知形态的映射列（已按定位表优先排序）
+        form = None
+        for tc in cols:
+            f = cv_form_map.get(tc)
+            if f:
+                form = f
+                break
+        # 展示值的 名称=编码 对照（存编码的列生成 WHERE 时必需）
+        code_of = {name: code for code, name in cv_items.get(code_name, [])}
+        pairs = [(n, code_of.get(n, '')) for n in values]
+        result.append({
+            'code_name': code_name,
+            'cn_name': cv_domains[code_name]['cn_name'],
+            'columns': cols,
+            'values': values,
+            'matched': matched,
+            'form': form,
+            'pairs': pairs,
+            'total': len(items),
+        })
+        if len(result) >= max_domains:
+            break
+    return result
+
+
 class RAGRetriever:
     """
     RAG 检索器：从 qa_pairs 表中检索相似问答对
@@ -46,11 +165,8 @@ class RAGRetriever:
     def __init__(self, top_k: int = 5):
         self.db = DatabaseManager()
         self.top_k = top_k
-        # 加载停用词（简单中文停用词）
-        self.stop_words = {
-            '的', '了', '是', '在', '有', '和', '与', '或', '为', '对', '从', '到', '及', '等',
-            '这', '那', '中', '上', '下', '查询', '统计', '获取', '查找', '列出', '所有'
-        }
+        # 加载停用词（简单中文停用词，模块级常量共享）
+        self.stop_words = _STOP_WORDS
         # 缓存 营销4.0 的所有有效字段
         self._valid_fields: Optional[Set[str]] = None
         self._valid_tables: Optional[Set[str]] = None
@@ -63,7 +179,7 @@ class RAGRetriever:
         invalidate_code_value_index()
     
     def _load_valid_schema(self) -> Tuple[Set[str], Set[str]]:
-        """加载 营销4.0 数据库中所有有效的表名和字段名（兼容 SQLite 和 MySQL）"""
+        """加载 营销4.0 数据库中所有有效的表名和字段名（业务库 information_schema）"""
         if self._valid_fields is not None:
             return self._valid_tables, self._valid_fields
         
@@ -167,27 +283,12 @@ class RAGRetriever:
         return valid_score, invalid_fields
     
     def extract_keywords(self, text: str) -> List[str]:
-        """从文本中提取关键词（去除停用词和短词）"""
-        if not text:
-            return []
-        
-        if _JIEBA_AVAILABLE:
-            words = jieba.lcut(text)
-        else:
-            words = self._simple_tokenize(text)
-        
-        keywords = []
-        for word in words:
-            word = word.strip().lower()
-            if len(word) >= 2 and word not in self.stop_words:
-                keywords.append(word)
-        
-        return keywords
-    
+        """从文本中提取关键词（去除停用词和短词）。委托模块级实现。"""
+        return extract_keywords(text)
+
     def _simple_tokenize(self, text: str) -> List[str]:
-        """简单分词（回退方案）"""
-        words = re.split(r'[\s,，.。!！?？;:；：\(\)（）]+', text)
-        return [w for w in words if w]
+        """简单分词（回退方案）。委托模块级实现。"""
+        return _simple_tokenize(text)
     
     def _keyword_match_score(self, user_keywords: List[str], question: str) -> float:
         """计算关键词匹配得分"""
@@ -518,93 +619,17 @@ class RAGRetriever:
 
     def retrieve_code_values(self, question: str, tables: List[str],
                              per_domain: int = 8, max_domains: int = 8) -> List[Dict]:
-        """按语义检索问题相关的码值维度。
+        """按语义检索问题相关的码值维度（委托模块级 match_code_value_index）。
 
         通道一（问题→值）：问题中出现的码值名称（如"e户通代扣"）直接命中其域；
         通道二（表→值域）：定位表中的码值列（如 valid_flag_desc）带上其值域。
-        返回: [{code_name, cn_name, columns, values, matched}]
+        返回: [{code_name, cn_name, columns, values, matched, form, pairs, total}]
         """
         self._load_code_value_index()
-        if not self._cv_domains:
-            return []
-
-        hits = {}  # code_name -> {'matched': set()}
-
-        # 通道一：问题子串命中码值名称（长度>=2 避免单字误命中）
-        for code_name, items in self._cv_items.items():
-            for _, item_name in items:
-                if len(item_name) >= 2 and item_name in question:
-                    hits.setdefault(code_name, {'matched': set()})['matched'].add(item_name)
-
-        # 通道一增强：问题分词反向命中长码值名
-        # （如"杭州"命中"国网浙江省电力有限公司杭州供电公司"——码值名未完整出现在问题中，但其片段是问题中的词）
-        # 通用业务词不参与反向匹配，否则"客户/用电"会灌爆命中列表
-        _REVERSE_STOP = {
-            '用电', '客户', '用户', '供电', '电力', '电费', '电量', '单位', '公司',
-            '记录', '数据', '信息', '情况', '业务', '哪些', '哪个', '如何', '怎么',
-            '什么', '是否', '所有', '相关', '查询', '统计', '分析', '多少', '几个'
-        }
-        try:
-            tokens = [t for t in self.extract_keywords(question)
-                      if len(t) >= 2 and t not in _REVERSE_STOP]
-        except Exception:
-            tokens = []
-        if tokens:
-            for code_name, items in self._cv_items.items():
-                for _, item_name in items:
-                    if len(item_name) < 4:
-                        continue
-                    for tok in tokens:
-                        if tok in item_name:
-                            hits.setdefault(code_name, {'matched': set()})['matched'].add(item_name)
-                            break
-
-        # 通道二：定位表中的码值列
-        located = set(tables or [])
-        for code_name, cols in self._cv_col_map.items():
-            if any(t in located for t, _ in cols):
-                hits.setdefault(code_name, {'matched': set()})
-
-        # 排序：有问题命中的域优先，其次按命中数
-        ordered = sorted(hits.items(), key=lambda kv: (not kv[1]['matched'], -len(kv[1]['matched'])))
-        result = []
-        for code_name, info in ordered:
-            dom = self._cv_domains.get(code_name)
-            if not dom:
-                continue  # 明细表中的孤儿域（code_values 无定义，如 bp_type）跳过
-            items = [name for _, name in self._cv_items.get(code_name, [])]
-            matched = sorted(info['matched'])
-            # 命中的值排前面，其余按 sort_order 补足 per_domain
-            values = matched + [v for v in items if v not in matched][:max(0, per_domain - len(matched))]
-            values = values[:per_domain]
-            if not values and not matched:
-                continue  # 无值域明细的编码类域（如 mgt_org_code）不展示
-            cols = self._cv_col_map.get(code_name, [])
-            # 优先展示定位表中的列
-            cols = sorted(cols, key=lambda tc: tc[0] not in located)
-            # 存储形态：取第一个已知形态的映射列（已按定位表优先排序）
-            form = None
-            for tc in cols:
-                f = self._cv_form_map.get(tc)
-                if f:
-                    form = f
-                    break
-            # 展示值的 名称=编码 对照（存编码的列生成 WHERE 时必需）
-            code_of = {name: code for code, name in self._cv_items.get(code_name, [])}
-            pairs = [(n, code_of.get(n, '')) for n in values]
-            result.append({
-                'code_name': code_name,
-                'cn_name': self._cv_domains[code_name]['cn_name'],
-                'columns': cols,
-                'values': values,
-                'matched': matched,
-                'form': form,
-                'pairs': pairs,
-                'total': len(items),
-            })
-            if len(result) >= max_domains:
-                break
-        return result
+        return match_code_value_index(
+            self._cv_domains, self._cv_items, self._cv_col_map, self._cv_form_map,
+            question, tables, per_domain=per_domain, max_domains=max_domains,
+            tokenize=self.extract_keywords)
 
     def get_code_value_translations(self) -> List[Tuple[str, str, Dict[str, str]]]:
         """存编码列的 名称→编码 翻译表：[(table, column, {item_name: item_code})]。

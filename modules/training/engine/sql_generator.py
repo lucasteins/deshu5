@@ -201,13 +201,27 @@ class SQLGenerator:
         self.model = config.KIMI_MODEL
         self._thinking = self._wf['generate']['thinking']  # thinking 模式开关（温度约束见 config 注释）
         self._static_prompt_head = None  # 静态提示词头部缓存：初始化后构建一次，不随每个问题重复组装
+
+        # 知识源（knowledge.source）：ontology → 本体服务（marketing_ontology 已生效版本）；
+        # 本体未就绪/异常时自动回退 legacy（SchemaPreloader/治理库直读），问数永不因本体缺失中断
+        self._onto = None
+        if self._wf.get('knowledge', {}).get('source', 'legacy') == 'ontology':
+            try:
+                from core.ontology.service import OntologyService
+                svc = OntologyService.get_instance()
+                if svc.available():
+                    self._onto = svc
+                else:
+                    print('[SQLGen] knowledge.source=ontology 但本体未就绪，回退 legacy', flush=True)
+            except Exception as e:
+                print(f'[WARN] 本体服务不可用，回退 legacy: {e}', flush=True)
         
-        # v3.0 新增
+        # v3.0 新增（concept_map 经知识源解析注入：ontology 档为本体概念面，否则 None=治理库/常量）
         self.use_intent = getattr(config, 'USE_INTENT_GENERATION', True) and _INTENT_AVAILABLE
         if self.use_intent:
-            self.intent_parser = IntentParser()
+            self.intent_parser = IntentParser(concept_map=self._concept_map('intent'))
             self.sql_builder = SQLBuilder()
-            self.template_matcher = SQLTemplateMatcher()
+            self.template_matcher = SQLTemplateMatcher(concept_map=self._concept_map('intent'))
 
         # LLM token 用量累加器（benchmark 效率统计用，纯附加；每次 generate 重置）
         self._usage_lock = threading.Lock()
@@ -229,6 +243,56 @@ class SQLGenerator:
     def _snapshot_usage(self) -> Dict:
         with self._usage_lock:
             return dict(self._usage_acc)
+
+    # ==================== 知识源解析（knowledge.source：ontology / legacy） ====================
+
+    def _schema_src(self):
+        """Schema 知识源（表名/注释/列/关系）：ontology 档走本体服务，否则 SchemaPreloader。"""
+        if self._onto is not None:
+            return self._onto
+        from core.schema_preloader import SchemaPreloader
+        return SchemaPreloader.get_instance()
+
+    def _concept_map(self, scope: str) -> dict:
+        """概念→表映射：ontology 档走本体概念面，否则 keyword_table_map provider。"""
+        if self._onto is not None:
+            try:
+                m = self._onto.get_concept_table_map(scope)
+                if m:
+                    return m
+            except Exception as e:
+                print(f'[WARN] 本体概念映射读取失败，回退 keyword_table_map: {e}', flush=True)
+        return get_keyword_table_map(scope)
+
+    def _family_synonyms(self) -> dict:
+        """同族表消歧同义词：ontology 档走本体同义词组，否则 business_rule provider。"""
+        if self._onto is not None:
+            try:
+                s = self._onto.get_family_synonyms()
+                if s:
+                    return s
+            except Exception as e:
+                print(f'[WARN] 本体同义词读取失败，回退 business_rule: {e}', flush=True)
+        return get_family_synonyms()
+
+    def _retrieve_code_values(self, question: str, tables: List[str],
+                              per_domain: int = 8, max_domains: int = 8) -> List[Dict]:
+        """码值检索：ontology 档走本体枚举快照索引，否则 RAG 治理库索引。"""
+        if self._onto is not None:
+            try:
+                return self._onto.retrieve_code_values(question, tables, per_domain, max_domains)
+            except Exception as e:
+                print(f'[WARN] 本体码值检索失败，回退 RAG: {e}', flush=True)
+        return self.rag_retriever.retrieve_code_values(question, tables, per_domain, max_domains)
+
+    def _code_value_translations(self):
+        """码值 名称→编码 翻译表：ontology 档走本体枚举快照，否则 RAG。"""
+        if self._onto is not None:
+            try:
+                return self._onto.get_code_value_translations()
+            except Exception as e:
+                print(f'[WARN] 本体码值翻译表失败，回退 RAG: {e}', flush=True)
+        return self.rag_retriever.get_code_value_translations()
 
     def generate(
         self,
@@ -369,8 +433,7 @@ class SQLGenerator:
             except Exception as e:
                 pass  # 重试失败，保留第一次的结果
         
-        dialect = self.db.get_dialect()
-        allowed_prefixes = ['SELECT', 'WITH'] if dialect == 'mysql' else ['SELECT', 'WITH', 'PRAGMA']
+        allowed_prefixes = ['SELECT', 'WITH']
         # 兜底路径同样要过执行校验：编造列/错误的 JOIN/哨兵 SQL 一律不得作为成功结果返回
         if sql and any(sql.strip().upper().startswith(p) for p in allowed_prefixes) \
                 and not has_invalid_table and not self._is_sentinel_sql(sql) and self._validate_sql(sql):
@@ -645,8 +708,7 @@ class SQLGenerator:
 
         # 5. 调用 LLM 生成 SQL（单次完整生成；未过校验走下方快速修复通道，不再整轮重试）
         valid_tables = set(self.schema_loader.get_table_names())
-        dialect = self.db.get_dialect()
-        allowed_prefixes = ['SELECT', 'WITH'] if dialect == 'mysql' else ['SELECT', 'WITH', 'PRAGMA']
+        allowed_prefixes = ['SELECT', 'WITH']
 
         last_error = None
         sql = ''          # 初始化，避免首次调用即异常时下方兜底引用未绑定变量
@@ -923,7 +985,8 @@ class SQLGenerator:
         """
         try:
             from core.knowledge_retriever import retrieve
-            items = retrieve(user_question, tables=located_tables, top_k=10)['items']
+            items = retrieve(user_question, tables=located_tables, top_k=10,
+                             concept_map=self._concept_map('intent'))['items']
         except Exception as e:
             print(f"[WARN] 知识检索失败，模式段为空: {e}", flush=True)
             return ''
@@ -965,8 +1028,7 @@ class SQLGenerator:
         if roster is None:
             roster = ''
             try:
-                from core.schema_preloader import SchemaPreloader
-                preloader = SchemaPreloader.get_instance()
+                preloader = self._schema_src()
                 table_names = preloader.get_table_names()
                 # 同族表判定：公共前缀 ≥15 且各自后缀 ≤4（如 curve_h/h_v/h_a、energy_day_l_xz/p）
                 family = set()
@@ -1064,12 +1126,28 @@ class SQLGenerator:
         '公变': ('公变', '台区'),
     }
 
+    def _locate_report_tables(self, user_question: str) -> List[str]:
+        """报表层优先定位（knowledge.report_first）：省/市/县三级统计语义问题
+        在本体 report 层实体中检索命中表；无命中返回空（明细层汇总兜底）。"""
+        if not self._onto or not self._wf.get('knowledge', {}).get('report_first', True):
+            return []
+        try:
+            return self._onto.locate_report_tables(user_question)
+        except Exception as e:
+            print(f'[WARN] 报表层定位失败: {e}', flush=True)
+            return []
+
     def _merge_located_tables(self, user_question: str, intent: Dict, llm_tables: List[str],
                               rule_tables: List[str], draft_tables: List[str], max_tables: int = 8) -> List[str]:
         """打分制合并三路定位结果 → 同族消歧 → 封顶 → 桥接补全。
-        证据权重：草稿 SQL 实际用到(4) > LLM 语义定位(3) > 规则/RAG 召回(1)；
+        证据权重：报表层优先(5，仅统计语义问题) > 草稿 SQL 实际用到(4) > LLM 语义定位(3) > 规则/RAG 召回(1)；
         仅规则命中的表若承载筛选条件字段则 +2 保命（条件关键词驱动是规则通道的职责）。"""
         scores = {}
+        report_tables = self._locate_report_tables(user_question)
+        for t in report_tables:
+            scores[t] = scores.get(t, 0) + 5
+        if report_tables:
+            print(f"[SQLGen] 报表层优先命中: {report_tables}", flush=True)
         for t in draft_tables or []:
             scores[t] = scores.get(t, 0) + 4
         for t in llm_tables or []:
@@ -1100,8 +1178,7 @@ class SQLGenerator:
             return set()
         carriers = set()
         try:
-            from core.schema_preloader import SchemaPreloader
-            preloader = SchemaPreloader.get_instance()
+            preloader = self._schema_src()
             for t in candidates:
                 cols = {c['name'] for c in preloader.get_columns(t)}
                 if fields & cols:
@@ -1137,6 +1214,24 @@ class SQLGenerator:
                     ri, rj = find(i), find(j)
                     if ri != rj:
                         parent[ri] = rj
+        # 实体同族合并（精炼层）：同实体成员表视为一族；限 ≤4 成员的小实体，
+        # 防"业务申请"这类大主题实体把语义不同的成员过度剪枝
+        if self._onto is not None:
+            try:
+                t2e = self._onto.table_to_entity()
+                ent_members = {}
+                for i, t in enumerate(tables):
+                    e = t2e.get(t)
+                    if e:
+                        ent_members.setdefault(e, []).append(i)
+                for idxs in ent_members.values():
+                    if 2 <= len(idxs) <= 4:
+                        for j in idxs[1:]:
+                            ri, rj = find(idxs[0]), find(j)
+                            if ri != rj:
+                                parent[ri] = rj
+            except Exception:
+                pass
         fams = {}
         for i in range(n):
             fams.setdefault(find(i), []).append(tables[i])
@@ -1159,13 +1254,12 @@ class SQLGenerator:
     def _family_keyword_hit(self, table: str, members: List[str], user_question: str) -> bool:
         """本表注释相对族内其他表的差异词（经同义词扩展）是否出现在问题中"""
         try:
-            from core.schema_preloader import SchemaPreloader
-            preloader = SchemaPreloader.get_instance()
+            preloader = self._schema_src()
             comment = preloader.get_table_comment(table) or ''
             others = ''.join((preloader.get_table_comment(o) or '') for o in members if o != table)
             diff = ''.join(ch for ch in comment if ch not in others).strip()
             keywords = set()
-            for key, group in (get_family_synonyms() or self.FAMILY_SYNONYMS).items():
+            for key, group in (self._family_synonyms() or self.FAMILY_SYNONYMS).items():
                 if key in diff or (key in comment and key not in others):
                     keywords.update(group)
             if len(diff) >= 2:
@@ -1178,9 +1272,8 @@ class SQLGenerator:
     FK_PATH_BLOCKED_HUBS = ('dim_cst_mgt_org',)
 
     def _build_fk_graph(self):
-        """主外键邻接图 + 边 JOIN 条件索引（来自启动预加载）"""
-        from core.schema_preloader import SchemaPreloader
-        rels = SchemaPreloader.get_instance().get_relationships()
+        """主外键邻接图 + 边 JOIN 条件索引（来自本体/启动预加载，按 knowledge.source 选源）"""
+        rels = self._schema_src().get_relationships()
         graph, conds = {}, {}
         for r in rels:
             a, b = r['path'][0], r['path'][1]
@@ -1339,8 +1432,7 @@ class SQLGenerator:
         if not tables:
             return ''
         try:
-            from core.schema_preloader import SchemaPreloader
-            preloader = SchemaPreloader.get_instance()
+            preloader = self._schema_src()
         except Exception:
             return ''
         # 问题关键词（用于紧凑表的条件列补入）；通用词不参与，近义词先做小映射
@@ -1401,7 +1493,7 @@ class SQLGenerator:
         if not sql:
             return sql
         try:
-            mappings = self.rag_retriever.get_code_value_translations()
+            mappings = self._code_value_translations()
         except Exception as e:
             print(f"[WARN] 码值翻译表获取失败: {e}", flush=True)
             return sql
@@ -1432,7 +1524,7 @@ class SQLGenerator:
         """码值维度上下文：按语义注入问题相关的码值域（可选值、维度↔表字段关系）"""
         self._last_code_value_hits = []
         try:
-            domains = self.rag_retriever.retrieve_code_values(user_question, tables)
+            domains = self._retrieve_code_values(user_question, tables)
         except Exception as e:
             print(f"[WARN] 码值检索失败: {e}", flush=True)
             return ''
@@ -1510,13 +1602,10 @@ class SQLGenerator:
         （由定位表字段上下文 + JOIN 路径提示 + 问答对 RAG 定向覆盖）；
         用电量/供电单位等业务专用规则由 _build_v3_prompt 按问题关键词条件注入。"""
         if self._static_prompt_head is None:
-            dialect = self.db.get_dialect()
             date_hint = (
-                "日期过滤请使用 strftime('%Y-%m', date_col) = 'YYYY-MM'、strftime('%Y-%m-%d', date_col) = 'YYYY-MM-DD' 或 BETWEEN 语法。"
-                if dialect == 'sqlite' else
                 "日期过滤请使用 DATE_FORMAT(date_col, '%Y-%m') = 'YYYY-MM'、DATE_FORMAT(date_col, '%Y-%m-%d') = 'YYYY-MM-DD' 或 BETWEEN 语法。"
             )
-            self._static_prompt_head = f"""你是电力营销数据仓库的 SQL 专家。根据下方定位到的表字段与问题，生成一条可执行的 {dialect.upper()} SELECT 语句。
+            self._static_prompt_head = f"""你是电力营销数据仓库的 SQL 专家。根据下方定位到的表字段与问题，生成一条可执行的 MySQL SELECT 语句。
 
 【生成规则】
 1. 只输出一行纯 SELECT（或 WITH...SELECT），不要 Markdown 代码块，不要解释性文字。
@@ -1585,7 +1674,8 @@ LIMIT：{intent.get('limit', '无')}"""
         _kr_items = None
         try:
             from core.knowledge_retriever import retrieve as _kr_retrieve
-            _kr_items = _kr_retrieve(user_question, top_k=20)['items']
+            _kr_items = _kr_retrieve(user_question, top_k=20,
+                                     concept_map=self._concept_map('intent'))['items']
         except Exception as e:
             print(f"[WARN] 统一知识检索失败，口径注入回退规则直读: {e}", flush=True)
         if _kr_items is not None:
@@ -1658,7 +1748,7 @@ LIMIT：{intent.get('limit', '无')}"""
         mapped_tables = []
         # P2：关键词映射已入库 keyword_table_map，空表/异常回退 KEYWORD_TO_TABLE_MAP 常量
         for kw in keywords:
-            for pattern, tables in (get_keyword_table_map('v24_fallback') or KEYWORD_TO_TABLE_MAP).items():
+            for pattern, tables in (self._concept_map('v24_fallback') or KEYWORD_TO_TABLE_MAP).items():
                 if pattern in kw.lower() or kw.lower() in pattern:
                     for t in tables:
                         if t not in mapped_tables:
@@ -2023,8 +2113,7 @@ LIMIT：{intent.get('limit', '无')}"""
         lines = content.split('\n')
         sql_lines = []
         in_sql = False
-        dialect = self.db.get_dialect()
-        allowed_prefixes = ['SELECT', 'WITH'] if dialect == 'mysql' else ['SELECT', 'WITH', 'PRAGMA']
+        allowed_prefixes = ['SELECT', 'WITH']
         for line in lines:
             stripped = line.strip()
             if not stripped:
@@ -2147,28 +2236,16 @@ LIMIT：{intent.get('limit', '无')}"""
         return sorted(tables - cte_names)
     
     def _normalize_sql_dialect(self, sql: str) -> str:
-        """根据目标数据库方言规范化日期函数"""
+        """规范化日期函数为 MySQL 方言（LLM/模板侧的 strftime 一律转 DATE_FORMAT）"""
         if not sql:
             return sql
-        dialect = self.db.get_dialect()
-        
-        if dialect == 'sqlite':
-            # 将 MySQL 风格的 DATE_FORMAT 转换为 SQLite strftime，并交换参数顺序
-            def replace_date_format(match):
-                col = match.group(1).strip()
-                fmt = match.group(2)
-                return f"strftime('{fmt}', {col})"
-            sql = re.sub(r"DATE_FORMAT\s*\(\s*([^,]+)\s*,\s*['\"]([^'\"]+)['\"]\s*\)", replace_date_format, sql, flags=re.IGNORECASE)
-            # YEAR/MONTH 函数
-            sql = re.sub(r"YEAR\s*\(\s*([^)]+)\s*\)", r"strftime('%Y', \1)", sql, flags=re.IGNORECASE)
-            sql = re.sub(r"MONTH\s*\(\s*([^)]+)\s*\)", r"strftime('%m', \1)", sql, flags=re.IGNORECASE)
-        elif dialect == 'mysql':
-            def replace_strftime(match):
-                fmt = match.group(1)
-                col = match.group(2).strip()
-                return f"DATE_FORMAT({col}, '{fmt}')"
-            sql = re.sub(r"strftime\s*\(\s*['\"]([^'\"]+)['\"]\s*,\s*([^)]+)\s*\)", replace_strftime, sql, flags=re.IGNORECASE)
-        
+
+        def replace_strftime(match):
+            fmt = match.group(1)
+            col = match.group(2).strip()
+            return f"DATE_FORMAT({col}, '{fmt}')"
+        sql = re.sub(r"strftime\s*\(\s*['\"]([^'\"]+)['\"]\s*,\s*([^)]+)\s*\)", replace_strftime, sql, flags=re.IGNORECASE)
+
         return sql
     
     def _probe_sql_error(self, sql: str) -> str:
@@ -2340,8 +2417,7 @@ LIMIT：{intent.get('limit', '无')}"""
             sql = self._translate_code_value_literals(sql)
             if not sql or self._is_sentinel_sql(sql):
                 return None
-            dialect = self.db.get_dialect()
-            allowed = ['SELECT', 'WITH'] if dialect == 'mysql' else ['SELECT', 'WITH', 'PRAGMA']
+            allowed = ['SELECT', 'WITH']
             if not any(sql.strip().upper().startswith(p) for p in allowed):
                 return None
             tables_in_sql = self._extract_tables_from_sql(sql)

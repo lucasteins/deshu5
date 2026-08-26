@@ -17,39 +17,64 @@ deshu5/
 │   ├── schema_preloader.py Schema 预加载单例（information_schema + 治理库关系文档）
 │   ├── schema_kb.py        Schema 知识库（表定位/列检索）
 │   ├── rag_retriever.py    RAG 检索（问答对/错题/码值相似度召回）
-│   └── knowledge_retriever.py 知识读取口（码值/模板/规则，空表回退代码常量）
+│   ├── knowledge_retriever.py 知识读取口（码值/模板/规则，空表回退代码常量）
+│   └── ontology/           本体模型层：从底座提炼本体快照，持久化于 marketing_ontology 库
+│       ├── model.py        本体内存模型（类/属性/关系/枚举/概念）+ 版本 diff
+│       ├── fingerprint.py  底座结构指纹（漂移检测：表/列/主外键/关系文档 hash）
+│       ├── builder.py      本体提炼（SchemaPreloader + 码值三表 + 概念映射 + 同义词）
+│       ├── store.py        marketing_ontology 库读写（正式版 + 变更提案）
+│       ├── service.py      问数模块统一门面（与 legacy 接口同形状，knowledge.source 切换）
+│       └── export.py       OWL/RDF 导出（RDF/XML、Turtle、N-Triples、JSON-LD）
 ├── modules/
 │   ├── settings/           ① 数据库配置 + LLM 配置
-│   │   └── routes.py       /api/settings/llm*、/api/settings/db*、/api/workflows*
+│   │   └── routes.py       /api/settings/llm*、/api/settings/db*（四库状态）、/api/workflows*
 │   ├── training/           ② 训练模式 + 智能问答
 │   │   ├── routes.py       出题/评价/生成(SSE)/判断/问答对库/错题集
 │   │   ├── engine/         NL2SQL 生成引擎（sql_generator 等 8 文件）
-│   │   └── workflow/       声明式生成工作流（7 预设，热切换）
+│   │   └── workflow/       声明式生成工作流（7 预设 + knowledge.source 知识源开关，热切换）
 │   ├── resources/          ③ 数据资源 + 统计看板
 │   │   ├── routes.py       /api/resources/*（CRUD+导入）、码值库、Schema 浏览、/api/stats
 │   │   ├── base.py         ResourceProvider 抽象基类
 │   │   ├── registry.py     资源注册表（惰性构造）
 │   │   └── providers/      9 类资源 provider（问答对/错题/码值/模板/规则…）
-│   └── provision/          ④ 素材提资
-│       ├── routes.py       上传→预览→执行(SSE)→复核 四步工作流
-│       └── provisioner.py  xlsx 模板解析/校验/溯源转换/LLM 标注
-├── static/                 前端（复用原版；设置弹窗新增 MySQL 配置区块）
-├── data/                   运行时数据依赖（DDL 元数据字典/码值 Excel）
+│   ├── provision/          ④ 素材提资
+│   │   ├── routes.py       上传→预览→执行(SSE)→复核 四步工作流
+│   │   └── provisioner.py  xlsx 模板解析/校验/溯源转换/LLM 标注
+│   └── ontology/           ⑤ 本体模型管理面
+│       └── routes.py       /api/ontology/*（浏览/导出/漂移检测/提案审批）
+├── static/                 前端（含「本体模型」页签：浏览/导出/变更审批横幅）
+├── data/                   运行时数据依赖（DDL 元数据 SQL/码值 Excel）
 └── uploads/                素材提资上传目录
 ```
 
 **依赖方向**（无循环）：
 - `modules/* → core`（连接层、知识底座）
 - `training → resources.providers`（生成时读取知识资源）
-- `provision / settings / resources` 互不依赖
+- `core/ontology → resources.providers`（提炼概念/同义词，函数级惰性 import）
+- `provision / settings / resources / ontology` 互不依赖
 
-## MySQL 底座（三库分工，与 deshu4 完全一致）
+## 本体模型层（数据底座 → 本体 → 问数）
+
+本体从数据底座提炼（表→owl:Class、列→owl:DatatypeProperty、主外键/治理关系→owl:ObjectProperty、
+码值→枚举、业务概念→skos:Concept），**持久化于 marketing_ontology 库，不临时抽取**。
+仅当检测到基础表结构漂移（结构指纹比对）时生成变更提案，前端「本体模型」页签审批通过后才换版生效；
+问数模块经 workflow `knowledge.source`（ontology/legacy）切换知识来源，支持 A/B 与一键回退。
+导出：`GET /api/ontology/export?format=owl|ttl|nt|jsonld`。
+
+**实体精炼层（三层两域）**：物理表按语义聚合为业务实体——主数据（MasterData：客户/计量点/供电单位…）
+与业务数据（BusinessData：日电量/应收电费/业务工单…）两域，同族表合一（日电量 3 表、96点曲线 3 表、
+工单 6 表…），纯关联表降级为实体间关系；ads_* 归入统计报表层（DataProduct），明细问题不召回，
+省/市/县三级统计问题优先检索（workflow `knowledge.report_first`，默认开，无命中回退明细汇总）。
+实体→物理表映射存 `ontology_entity_defs` 表（本体页签可编辑），编辑经重建提案审批后生效。
+
+## MySQL 底座（四库分工）
 
 | 库 | 用途 |
 |----|------|
 | marketing_40 | 业务库：35 张营销共享层表，SQL 只读执行目标 |
 | marketing_governance | 治理库：问答对/错题/码值/Schema 文档/提资溯源 |
 | marketing_log | 日志库：generation_logs 运行日志 |
+| marketing_ontology | 本体库：本体版本/类/属性/关系/枚举/概念/变更提案 |
 
 ## 相比 deshu4 的变化
 

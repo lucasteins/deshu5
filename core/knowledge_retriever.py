@@ -150,10 +150,11 @@ def _question_keywords(question: str) -> list:
     return _kw_extractor.extract_keywords(question)
 
 
-def score_signature_rows(question: str, rows: list) -> dict:
+def score_signature_rows(question: str, rows: list, concept_map: dict = None) -> dict:
     """签名守卫+打分（自 SQLTemplateMatcher._match_by_signature 抽取，判分逻辑不变）。
 
     rows: 含 signature(dict)/has_slots/sql_rule（模板骨架）的条目（prepared 形态）。
+    concept_map: 可选概念→表映射注入（本体层概念面）；None 时读治理库 keyword_table_map。
     返回 {id: (kw_ratio, sig_sort_tuple)}；未过现行守卫（关键词命中≥1、签名表全覆盖、
     G1~G4、无槽位模板全命中）的行不在结果中——signature_score>0 即达到原匹配阈值。"""
     # 语义形态守卫（template-first A/B 实测误配驱动，2026-08-10）：
@@ -166,12 +167,15 @@ def score_signature_rows(question: str, rows: list) -> dict:
     filter_signals = get_draft_filter_signals() or ()
     filter_hit = any(k in question for k in filter_signals)
 
-    # 问题关键词 → 表（intent 关键词映射反查；库空时回退代码常量）
-    from modules.resources.providers.keyword_table_map import get_keyword_table_map
-    kw_map = get_keyword_table_map('intent')
-    if not kw_map:
-        from modules.training.engine.intent_parser import DEFAULT_CONCEPT_TO_TABLES
-        kw_map = DEFAULT_CONCEPT_TO_TABLES
+    # 问题关键词 → 表（概念映射：注入值优先——本体层概念面；否则治理库；库空回退代码常量）
+    if concept_map:
+        kw_map = concept_map
+    else:
+        from modules.resources.providers.keyword_table_map import get_keyword_table_map
+        kw_map = get_keyword_table_map('intent')
+        if not kw_map:
+            from modules.training.engine.intent_parser import DEFAULT_CONCEPT_TO_TABLES
+            kw_map = DEFAULT_CONCEPT_TO_TABLES
     q_tables = set()
     for kw, tables in kw_map.items():
         if kw and kw in question:
@@ -229,8 +233,11 @@ def _prepare(row: dict, qtexts: dict) -> dict:
     return r
 
 
-def retrieve(question: str, tables: list = None, top_k: int = 5) -> dict:
+def retrieve(question: str, tables: list = None, top_k: int = 5, concept_map: dict = None) -> dict:
     """统一知识检索：sql_knowledge 全表（enabled=1）统一打分，不按类型过滤。
+
+    concept_map: 可选概念→表映射注入（本体层概念面，ontology 档由 SQLGenerator 传入）；
+    None 时签名守卫读治理库 keyword_table_map（空表回退代码常量）。
 
     返回 {'direct_match': item|None, 'items': [按 total_score 降序的条目]}；
     item 在原始行字段上附加：item_type（内容推断，渲染判定时使用）、signature（推导）、
@@ -242,7 +249,7 @@ def retrieve(question: str, tables: list = None, top_k: int = 5) -> dict:
         return {'direct_match': None, 'items': []}
 
     sig_rows = [p for p in prepared if p['item_type'] == 'template' and p.get('sql_rule')]
-    sig_scores = score_signature_rows(question, sig_rows)
+    sig_scores = score_signature_rows(question, sig_rows, concept_map=concept_map)
     q_kws = [k for k in _question_keywords(question) if k]
     in_tables = set(tables or [])
 

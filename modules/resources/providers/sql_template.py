@@ -22,7 +22,7 @@ from modules.resources.base import ResourceProvider, rows_to_dicts, row_to_dict,
 # 模板 = sql_rule 为完整查询骨架（SELECT/WITH 开头）；规则 = 其余（含 trigger_words 的
 # 口径规则 + 词表类备管行）。两类互补且互斥，合计=全表。
 # 注意：不要用 LIKE 'SELECT%'——pymysql 带参执行会对 SQL 中字面 % 做格式化（ValueError），
-# 故用 SUBSTR 等值比较（MySQL/SQLite 双方言兼容）。
+# 故用 SUBSTR 等值比较。
 TPL_WHERE = ("(UPPER(SUBSTR(LTRIM(COALESCE(sql_rule, '')), 1, 6)) = 'SELECT'"
              " OR UPPER(SUBSTR(LTRIM(COALESCE(sql_rule, '')), 1, 4)) = 'WITH')")
 RULE_WHERE = ("(NOT (UPPER(SUBSTR(LTRIM(COALESCE(sql_rule, '')), 1, 6)) = 'SELECT'"
@@ -30,43 +30,25 @@ RULE_WHERE = ("(NOT (UPPER(SUBSTR(LTRIM(COALESCE(sql_rule, '')), 1, 6)) = 'SELEC
 
 
 def _ensure_table(db=None):
-    """建表（IF NOT EXISTS，双方言，瘦身版 12 列）。读取路径首次访问时也会调用，保证任何环境可启动。"""
+    """建表（IF NOT EXISTS，MySQL 方言，瘦身版 12 列）。读取路径首次访问时也会调用，保证任何环境可启动。"""
     db = db or DatabaseManager()
     with db.connect_governance() as conn:
-        if db.get_dialect() == 'mysql':
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS sql_knowledge (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    name VARCHAR(128) NOT NULL COMMENT '中文名称',
-                    description TEXT COMMENT '中文描述',
-                    sql_rule TEXT COMMENT 'SQL规则：模板=完整骨架(含槽位)；规则=SQL片段(表达式/过滤)',
-                    trigger_words TEXT COMMENT '规则触发关键词 JSON',
-                    sql_tables TEXT COMMENT '依赖表 JSON',
-                    example_qa_ids TEXT COMMENT '溯源题号',
-                    domain_l1 VARCHAR(16),
-                    domain_l2 VARCHAR(16),
-                    domain_l3 VARCHAR(16),
-                    enabled TINYINT(1) DEFAULT 1,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='统一SQL知识库（瘦身版）'
-            ''')
-        else:
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS sql_knowledge (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name VARCHAR(128) NOT NULL,
-                    description TEXT,
-                    sql_rule TEXT,
-                    trigger_words TEXT,
-                    sql_tables TEXT,
-                    example_qa_ids TEXT,
-                    domain_l1 VARCHAR(16),
-                    domain_l2 VARCHAR(16),
-                    domain_l3 VARCHAR(16),
-                    enabled BOOLEAN DEFAULT 1,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS sql_knowledge (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                name VARCHAR(128) NOT NULL COMMENT '中文名称',
+                description TEXT COMMENT '中文描述',
+                sql_rule TEXT COMMENT 'SQL规则：模板=完整骨架(含槽位)；规则=SQL片段(表达式/过滤)',
+                trigger_words TEXT COMMENT '规则触发关键词 JSON',
+                sql_tables TEXT COMMENT '依赖表 JSON',
+                example_qa_ids TEXT COMMENT '溯源题号',
+                domain_l1 VARCHAR(16),
+                domain_l2 VARCHAR(16),
+                domain_l3 VARCHAR(16),
+                enabled TINYINT(1) DEFAULT 1,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='统一SQL知识库（瘦身版）'
+        ''')
         conn.commit()
 
 

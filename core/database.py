@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """MySQL 数据访问底座（deshu5 重构版）
 
-三个库的职责划分（与 deshu4 生产库完全一致，存量数据直接可用）：
+四个库的职责划分（与 deshu4 生产库完全一致，存量数据直接可用）：
 - MYSQL_DB_BUSINESS   业务库（marketing_40）：35 张营销共享层表，SQL 只读执行目标
 - MYSQL_DB_GOVERNANCE 治理库（marketing_governance）：问答对/错题/码值/Schema 文档/提资溯源
 - MYSQL_DB_LOG        日志库（marketing_log）：generation_logs 等运行日志
+- MYSQL_DB_ONTOLOGY   本体库（marketing_ontology）：本体模型层存储
 
-连接封装说明：代码层沿用 ? 占位符 + RANDOM() 的 SQLite 书写习惯，
+连接封装说明：代码层沿用 ? 占位符书写习惯，
 由 MySQLConnectionWrapper 统一转换为 MySQL 方言（%s / RAND()）。
 """
 import re
@@ -71,7 +72,7 @@ class MySQLConnectionWrapper:
 
 
 class DatabaseManager:
-    """MySQL 连接工厂：business / governance / log 三个库的上下文管理器"""
+    """MySQL 连接工厂：business / governance / log / ontology 四个库的上下文管理器"""
 
     def _get_mysql_conn(self, database: str):
         return pymysql.connect(
@@ -103,6 +104,14 @@ class DatabaseManager:
     @contextmanager
     def connect_log(self):
         conn = MySQLConnectionWrapper(self._get_mysql_conn(db_profile.current()['log']))
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+    @contextmanager
+    def connect_ontology(self):
+        conn = MySQLConnectionWrapper(self._get_mysql_conn(db_profile.current()['ontology']))
         try:
             yield conn
         finally:
@@ -163,15 +172,13 @@ class DatabaseManager:
         """)
         return [row[0] for row in cursor.fetchall()]
 
-    def get_dialect(self) -> str:
-        return 'mysql'
-
     def ping(self) -> dict:
-        """连通性检查：三个库各取一次 1。返回 {database: ok/error}。"""
+        """连通性检查：四个库各取一次 1。返回 {database: ok/error}。"""
         result = {}
         for name, ctx in (('business', self.connect_business),
                           ('governance', self.connect_governance),
-                          ('log', self.connect_log)):
+                          ('log', self.connect_log),
+                          ('ontology', self.connect_ontology)):
             try:
                 with ctx() as conn:
                     conn.execute('SELECT 1')

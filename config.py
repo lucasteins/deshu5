@@ -28,6 +28,7 @@ MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', '')  # 从 .env 读取，勿�
 MYSQL_DB_BUSINESS = os.environ.get('MYSQL_DB_BUSINESS', 'marketing_40')      # 业务库
 MYSQL_DB_GOVERNANCE = os.environ.get('MYSQL_DB_GOVERNANCE', 'marketing_governance')  # 治理库
 MYSQL_DB_LOG = os.environ.get('MYSQL_DB_LOG', 'marketing_log')               # 日志库
+MYSQL_DB_ONTOLOGY = os.environ.get('MYSQL_DB_ONTOLOGY', 'marketing_ontology')  # 本体库
 MYSQL_CHARSET = 'utf8mb4'
 
 # ==================== LLM 兜底默认值（运行时配置走 llm_settings.json）====================
@@ -43,13 +44,10 @@ if not KIMI_API_KEY:
     warnings.warn('KIMI_API_KEY 未配置，请在环境变量或 .env 文件中设置。')
 
 # ==================== Schema 元数据来源 ====================
-# 全量字段描述来源：元数据字典（SQLite 字典文件，只读）
-DDL_COLUMN_DICT_DB = os.environ.get(
-    'DDL_COLUMN_DICT_DB', str(BASE_DIR / 'data' / '35张营销共享层表_元数据字典.db'))
 # 表级描述 + 主外键关系来源（精简版 DDL）
 DDL_TABLE_REL_FILE = os.environ.get(
     'DDL_TABLE_REL_FILE', str(BASE_DIR / 'data' / '35张营销共享层表_重构版v2.0_主外键精简版.sql'))
-# 兼容回退：完整 DDL SQL（未提供元数据字典时解析）
+# 全量字段描述来源（完整版 DDL SQL）
 DDL_SCHEMA_FILE = os.environ.get(
     'DDL_SCHEMA_FILE', str(BASE_DIR / 'data' / '35张营销共享层表_重构版v2.0_20260519.sql'))
 
@@ -103,3 +101,7 @@ QGEN_MODEL = os.environ.get('QGEN_MODEL', 'deepseek-v4-flash')
 # ==================== SQL 安全（只读执行）====================
 ALLOWED_SQL_PREFIXES = ('SELECT', 'WITH')
 FORBIDDEN_KEYWORDS = ('DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE')
+
+# ==================== 本体模型层 ====================
+ONTOLOGY_BASE_IRI = os.environ.get('ONTOLOGY_BASE_IRI', 'http://deshu5.local/ontology/marketing#')
+ONTOLOGY_ENABLED = os.environ.get('ONTOLOGY_ENABLED', 'true').lower() in ('true', '1', 'yes')

@@ -65,10 +65,8 @@ TARGET_FIELDS = {
 # ==================== 建表 ====================
 
 def ensure_tables(db=None):
-    """ingest_runs / ingest_provenance 建表（IF NOT EXISTS）。"""
+    """ingest_runs / ingest_provenance 建表（IF NOT EXISTS，MySQL 方言）。"""
     db = db or DatabaseManager()
-    if db.get_dialect() != 'mysql':
-        return  # 素材提资面向 MySQL 治理库；SQLite 开发库不建
     with db.connect_governance() as conn:
         conn.execute('''
             CREATE TABLE IF NOT EXISTS ingest_runs (
@@ -138,11 +136,13 @@ def parse_workbook(path: str) -> dict:
         header_row = None
         headers = []
         data = []
-        for row in rows_iter:
+        # enumerate 行号对齐 Excel 物理行号；空单元格在只读模式下是 EmptyCell
+        # （无 column/row 属性），用枚举序号而非 cell.column/cell.row 取坐标
+        for excel_row_no, row in enumerate(rows_iter, start=1):
             if header_row is None:
                 headers = [_norm_header(c.value) for c in row]
                 if any(headers):
-                    header_row = row[0].row
+                    header_row = excel_row_no
                 continue
             rec = {}
             empty = True
@@ -156,10 +156,10 @@ def parse_workbook(path: str) -> dict:
                     empty = False
                 rec[headers[i]] = {
                     'v': v,
-                    'cell': f'{key}!{get_column_letter(cell.column)}{cell.row}',
+                    'cell': f'{key}!{get_column_letter(i + 1)}{excel_row_no}',
                 }
             if not empty:
-                data.append({'src_row': row[0].row, 'fields': rec})
+                data.append({'src_row': excel_row_no, 'fields': rec})
         parsed[key] = {'title': ws.title, 'headers': [h for h in headers if h], 'rows': data}
     wb.close()
     return parsed
@@ -267,7 +267,8 @@ def validate(parsed: dict, db=None) -> dict:
                 _issue(b, r, 'fail', f'所属域[{dom}]不在 10 个一级业务域')
                 bad = True
             if sub:
-                m = re.match(r'^([A-Za-z]{3}\d{2})', str(sub))
+                # 域码前缀长度不固定（Grid 为 4 字母，其余 3 字母），用 + 而非 {3}
+                m = re.match(r'^([A-Za-z]+\d{2})', str(sub))
                 if not m or m.group(1) not in l2_codes:
                     _issue(b, r, 'warn', f'二级业务分类[{sub}]无法解析到 business_domains')
             if tname and tname not in biz_cols:
@@ -592,7 +593,7 @@ def convert_run(run_id: str, parsed: dict, validation: dict,
             freq, c_fr = _f(rec, '更新频率')
             src_sys, c_ss = _f(rec, '来源系统')
             dl1 = l1_map.get(dom)
-            m = re.match(r'^([A-Za-z]{3}\d{2})', str(sub or ''))
+            m = re.match(r'^([A-Za-z]+\d{2})', str(sub or ''))  # 前缀 3-4 字母（Grid 为 4）
             dl2 = m.group(1) if m else None
             doc_text = (f'表名：{tname}，中文名：{cname}，行数：{rows_cnt}。'
                         f'层级：{layer or ""}；负责人：{owner or ""}；数据时间范围：{span or ""}；'
@@ -1143,8 +1144,112 @@ def _preview_fields(sheet_key, rec):
     return out
 
 
+# ==================== 复核优先级 ====================
+
+# 语义类字段：取值变更影响业务含义（码值名称/表字段中文名/业务域/主键等），必须人工逐条确认
+_HIGH_FIELDS = {
+    ('schema_table_docs', 'table_comment'),
+    ('schema_table_docs', 'domain_l1'),
+    ('schema_table_docs', 'domain_l2'),
+    ('schema_column_docs', 'column_comment'),
+    ('schema_column_docs', 'is_pk'),
+    ('code_values', 'code_cn_name'),
+    ('code_value_items', 'item_name'),
+    ('sql_knowledge', 'sql_rule'),
+    ('qa_pairs', 'question'),
+    ('qa_pairs', 'standard_sql'),
+}
+# 结构/格式类字段：客观类型与形态，批量确认风险可控
+_MEDIUM_FIELDS = {
+    ('schema_column_docs', 'data_type'),
+    ('code_values', 'data_type'),
+    ('code_value_column_form', 'form'),
+}
+# 其余（doc_text/description/sort_order/maintainer/LLM 标注等）默认低
+#
+# row_count 是客观事实，不参与人工复核（2026-08-26 用户口径）：
+# 冲突时以业务库 information_schema 实际行数自动校准，见 batch_confirm。
+_AUTO_CAL_FIELDS = {('schema_table_docs', 'row_count')}
+
+_CONFLICT_RE = re.compile(r'^冲突：库内\[(.*)\] vs 模板\[(.*)\]$')
+
+
+def _actual_row_count(db, table_name):
+    """业务库实际行数（information_schema.table_rows 估计值，元数据展示口径）。"""
+    try:
+        with db.connect_business() as conn:
+            row = conn.execute(
+                'SELECT table_rows FROM information_schema.tables '
+                'WHERE table_schema = DATABASE() AND table_name = ?', (table_name,)).fetchone()
+            return int(row[0]) if row and row[0] is not None else None
+    except Exception:
+        return None
+
+
+def compute_priority(target_table, field_name, source_kind, source_ref, field_value):
+    """复核优先级 → ('高'|'中'|'低', 原因)。
+
+    规则（2026-08-26 批量复核功能）：
+    - row_count 等客观事实字段 → 低（批量确认时自动校准为实际值，无需人工决策）；
+    - 模板值为空（确认=用空值覆盖库内值，有数据损失风险）→ 高；
+    - 仅大小写/首尾空白差异 → 低（噪声冲突）；
+    - 语义类字段 → 高；结构/格式类字段 → 中；其余（doc_text/描述/排序/LLM 标注等）→ 低。
+    """
+    if (target_table, field_name) in _AUTO_CAL_FIELDS:
+        return '低', '客观事实字段，批量确认时按业务库实际值自动校准'
+    if field_value in (None, ''):
+        return '高', '模板值为空，确认将清空库内值'
+    m = _CONFLICT_RE.match(source_ref or '')
+    if m and m.group(1).strip().casefold() == m.group(2).strip().casefold():
+        return '低', '仅大小写/格式差异'
+    key = (target_table, field_name)
+    if key in _HIGH_FIELDS:
+        return '高', '语义字段取值变更'
+    if key in _MEDIUM_FIELDS:
+        return '中', '结构/格式字段'
+    if source_kind == 'llm':
+        return '低', 'LLM 标注'
+    return '低', '机械性/描述类字段'
+
+
+def batch_confirm(prov_ids, db=None) -> dict:
+    """批量复核确认：仅允许中/低优先级，高优先级服务端拒绝（必须逐条人工确认）。
+
+    以溯源行当前 field_value 回填目标表（与单条 confirm 同口径）；
+    row_count 等客观事实字段例外——回填值改为业务库实际值（自动校准）。
+    返回 {'confirmed': n, 'refused': [(id, 原因)], 'failed': [(id, 错误)]}。"""
+    db = db or DatabaseManager()
+    ensure_tables(db)
+    confirmed, refused, failed = 0, [], []
+    with db.connect_governance() as conn:
+        for pid in prov_ids:
+            row = conn.execute(
+                'SELECT target_table, target_key, field_name, source_kind, source_ref,'
+                ' field_value, review_status'
+                ' FROM ingest_provenance WHERE id = ?', (int(pid),)).fetchone()
+            if not row or row[6] != 'pending':
+                continue
+            pri, reason = compute_priority(row[0], row[2], row[3], row[4], row[5])
+            if pri == '高':
+                refused.append((int(pid), reason))
+                continue
+            value = row[5]
+            if (row[0], row[2]) in _AUTO_CAL_FIELDS:
+                actual = _actual_row_count(db, row[1])
+                if actual is None:
+                    failed.append((int(pid), '业务库实际行数读取失败'))
+                    continue
+                value = actual
+            try:
+                confirm_provenance(int(pid), value, db=db)
+                confirmed += 1
+            except Exception as e:
+                failed.append((int(pid), str(e)[:100]))
+    return {'confirmed': confirmed, 'refused': refused, 'failed': failed}
+
+
 def get_review_queue(run_id: str = None, db=None) -> list:
-    """人工复核队列：review_status='pending' 的溯源行（可按 run 过滤）。"""
+    """人工复核队列：review_status='pending' 的溯源行（可按 run 过滤），附复核优先级。"""
     db = db or DatabaseManager()
     ensure_tables(db)
     where, params = "WHERE review_status = 'pending'", []
@@ -1158,8 +1263,16 @@ def get_review_queue(run_id: str = None, db=None) -> list:
             f' FROM ingest_provenance {where} ORDER BY id', params)
         cols = ['id', 'run_id', 'sheet_name', 'src_row', 'target_table', 'target_key',
                 'field_name', 'source_kind', 'source_ref', 'field_value', 'review_status', 'created_at']
-        return [{c: (str(v) if v is not None else None) for c, v in zip(cols, row)}
-                for row in cursor.fetchall()]
+        items = [{c: (str(v) if v is not None else None) for c, v in zip(cols, row)}
+                 for row in cursor.fetchall()]
+    for it in items:
+        pri, reason = compute_priority(it['target_table'], it['field_name'],
+                                       it['source_kind'], it['source_ref'], it['field_value'])
+        it['priority'] = pri
+        it['priority_reason'] = reason
+    order = {'高': 0, '中': 1, '低': 2}
+    items.sort(key=lambda x: (order.get(x['priority'], 9), int(x['id'])))
+    return items
 
 
 def confirm_provenance(prov_id: int, field_value, db=None) -> dict:
@@ -1191,6 +1304,12 @@ def confirm_provenance(prov_id: int, field_value, db=None) -> dict:
                 conn.execute(
                     f'UPDATE {target_table} SET {field_name} = ? WHERE table_name = ? AND column_name = ? AND code_name = ?',
                     (field_value, tn, col, cn))
+            elif target_table == 'schema_column_docs':
+                # target_key = 'table.column'（表名/列名均不含点）
+                tn, col = target_key.split('.', 1)
+                conn.execute(
+                    f'UPDATE {target_table} SET {field_name} = ? WHERE table_name = ? AND column_name = ?',
+                    (field_value, tn, col))
             elif key_col:
                 conn.execute(
                     f'UPDATE {target_table} SET {field_name} = ? WHERE {key_col} = ?',

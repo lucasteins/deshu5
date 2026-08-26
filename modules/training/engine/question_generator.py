@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-"""智能出题模块：LLM 基于 35 张表业务内容自由生成自然语言业务问题。
+"""智能出题模块：LLM 基于业务库全量表的业务内容自由生成自然语言业务问题。
 
-设计思路（2026-08-14 优化：覆盖感知 + 批量生成 + Prompt 瘦身 + 去重缓存）：
+设计思路（2026-08-14 优化：覆盖感知 + 批量生成 + Prompt 瘦身 + 去重缓存；
+2026-08-25 修复：未分类域调度——无 domain_l2 标注的表纳入覆盖感知轮转，覆盖业务库全量实体）：
 1. 静态上下文（初始化时构建一次）：全量表描述 + 主外键关系（SchemaPreloader，与 SQL 生成同源）。
-2. 覆盖感知锚点：按 qa_pairs 已出题数对表加权（欠覆盖表权重高），无放回抽样，
-   保证长尾表/业务域随出题轮次逐渐被覆盖（解决旧版纯随机导致的覆盖不均）。
+2. 覆盖感知锚点：按 qa_pairs 已出题数对表/业务域加权（欠覆盖权重高），无放回抽样；
+   无业务域标注的表归入虚拟"未分类"域一并参与加权，保证长尾表/业务域随出题轮次逐渐被覆盖。
 3. 批量生成 + 队列：一次 LLM 调用产出 QGEN_BATCH_SIZE 道题（每题指定不同锚点组），
    校验去重后入队；generate() 优先弹出队列——队列命中时近即时返回（解决逐题单调的时延）。
 4. Prompt 瘦身：锚点表字段摘要按优先级截断（PK>描述列>日期列>度量列，默认 30 列/表），
@@ -87,6 +88,13 @@ DIFFICULTY_TYPE_MAP = {
 # 难度配比 基础:进阶:挑战 = 1:2:1
 DIFFICULTY_WEIGHTS = {'基础题': 1, '进阶题': 2, '挑战题': 1}
 
+# 虚拟域哨兵：业务库中无 domain_l2 标注的表归入"未分类"域参与调度
+# （2026-08-25：修复全量表覆盖——原实现候选池只取已标注域内的表，未标注表永远无法成为锚点）
+_UNCLASSIFIED_DOMAIN = '__unclassified__'
+
+# 事实表前缀：dwd（明细层）+ ads（应用层，统计/事实性质）
+_FACT_PREFIXES = ('dwd_', 'ads_')
+
 # 可调旋钮（config 可覆盖）：批量生成每批题数、锚点表字段摘要列数上限、出题专用 Provider
 BATCH_SIZE = int(getattr(config, 'QGEN_BATCH_SIZE', '3'))
 DIGEST_COL_CAP = int(getattr(config, 'QGEN_DIGEST_COL_CAP', '30'))
@@ -122,26 +130,21 @@ class QuestionGenerator:
         self._domain_of_table, self._domain_names = self._load_domain_map()  # 表→二级业务域；域码→域中文名
         self._domain_coverage = self._load_domain_coverage()  # 二级业务域 -> 已出题数（qa_pairs.domain_l2）
         self._neighbors = self._load_neighbors()   # 表 -> 关联表集合（物理外键 ∪ 治理关系文档）
+        # 无域标注表归入虚拟"未分类"域，参与覆盖感知调度（否则这些表永远无法成为锚点）
+        self._unclassified_tables = sorted(set(self.schema) - set(self._domain_of_table))
+        if self._unclassified_tables:
+            self._domain_names[_UNCLASSIFIED_DOMAIN] = '未分类'
+            print(f"[QuestionGen] 未分类域纳入调度：{len(self._unclassified_tables)} 张无域标注表")
 
     # ---------- 数据加载 ----------
     def _load_table_comments(self) -> Dict[str, str]:
-        """加载表注释。
-
-        MySQL 模式权威源 = 业务库 information_schema（经 SchemaPreloader 单例缓存）；
-        SQLite 模式保持 governance.schema_table_docs 文档路径不变。
-        """
+        """加载表注释（权威源 = 业务库 information_schema，经 SchemaPreloader 单例缓存）。"""
         comments = {}
         try:
-            if self.db.get_dialect() == 'mysql':
-                from core.schema_preloader import SchemaPreloader
-                preloader = SchemaPreloader.get_instance()
-                for name in preloader.get_table_names():
-                    comments[name] = preloader.get_table_comment(name) or BUSINESS_TABLE_NAMES.get(name, name)
-            else:
-                with self.db.connect_governance() as conn:
-                    for row in conn.execute('SELECT table_name, table_comment FROM schema_table_docs'):
-                        name, comment = row
-                        comments[name] = comment or BUSINESS_TABLE_NAMES.get(name, name)
+            from core.schema_preloader import SchemaPreloader
+            preloader = SchemaPreloader.get_instance()
+            for name in preloader.get_table_names():
+                comments[name] = preloader.get_table_comment(name) or BUSINESS_TABLE_NAMES.get(name, name)
         except Exception as e:
             print(f"[WARN] 加载表注释失败: {e}")
             comments = dict(BUSINESS_TABLE_NAMES)
@@ -268,21 +271,34 @@ class QuestionGenerator:
         return picked
 
     def _pick_domain(self) -> Optional[str]:
-        """覆盖感知业务域选择：权重 = 1/(1+该域已出题数)。无域数据时返回 None（退回全域随机）。"""
+        """覆盖感知业务域选择：权重 = 1/(1+该域已出题数)。无域数据时返回 None（退回全域随机）。
+
+        未分类域（无 domain_l2 标注的表）一并参与加权：其已出题数 = 域内表的表级
+        覆盖数之和（self._coverage 随入库增量更新），保证欠覆盖表群优先被选中。"""
         domains = sorted({self._domain_of_table[t] for t in self._domain_of_table})
+        counts = [self._domain_coverage.get(d, 0) for d in domains]
+        if self._unclassified_tables:
+            domains.append(_UNCLASSIFIED_DOMAIN)
+            counts.append(sum(self._coverage.get(t, 0) for t in self._unclassified_tables))
         if not domains:
             return None
-        weights = [1.0 / (1.0 + self._domain_coverage.get(d, 0)) for d in domains]
+        weights = [1.0 / (1.0 + c) for c in counts]
         return random.choices(domains, weights=weights, k=1)[0]
 
     def _pick_anchor_tables(self, domain: Optional[str] = None, diff: Optional[str] = None) -> List[str]:
-        """覆盖感知锚点表 2-4 张（至少 1 张 dwd 事实表）。
+        """覆盖感知锚点表 2-4 张（至少 1 张 dwd/ads 事实表）。
 
         工作流：先定业务域（候选表收敛到该域），再按表级覆盖权重抽样；
-        进阶/挑战题经关系图谱扩展 1 张关联表，保证多表题有合法 JOIN 路径。"""
+        进阶/挑战题经关系图谱扩展 1 张关联表，保证多表题有合法 JOIN 路径。
+        未分类域：候选池 = 无域标注表，且池内无事实表时留在池内抽样
+        （不退回全域事实表），保证未标注表真正被锚定。"""
         from core.schema_preloader import SchemaPreloader
         names = SchemaPreloader.get_instance().get_table_names()
-        if domain:
+        if domain == _UNCLASSIFIED_DOMAIN:
+            pool = list(self._unclassified_tables)
+            if len(pool) < 2:
+                pool = list(names)
+        elif domain:
             pool = [t for t in names if self._domain_of_table.get(t) == domain]
             if len(pool) < 3:
                 # 域内表太少：优先用该域表的关联表补足（保持业务主题连贯），再退回全域
@@ -292,8 +308,13 @@ class QuestionGenerator:
                 pool = list(names)
         else:
             pool = list(names)
-        facts = [t for t in pool if t.startswith('dwd_')] or [t for t in names if t.startswith('dwd_')]
-        dims = [t for t in pool if not t.startswith('dwd_')] or [t for t in names if not t.startswith('dwd_')]
+        facts = [t for t in pool if t.startswith(_FACT_PREFIXES)]
+        dims = [t for t in pool if not t.startswith(_FACT_PREFIXES)]
+        if not facts:
+            facts = list(pool) if domain == _UNCLASSIFIED_DOMAIN \
+                else [t for t in names if t.startswith(_FACT_PREFIXES)]
+        if not dims:
+            dims = [t for t in names if not t.startswith(_FACT_PREFIXES)] or list(pool)
         n_facts = random.choice([1, 1, 2])
         anchors = self._weighted_sample(facts, k=min(n_facts, len(facts)))
         n_total = random.randint(2, 4)
@@ -509,8 +530,12 @@ class QuestionGenerator:
             s = t['samples']
             samples_text = '\n'.join(s['code_values'] +
                                      [f"- {k}：{v}" for k, v in s['raw'].items()]) or '（无）'
-            domain_text = (f"业务分类：{t['domain']}（{self._domain_names.get(t['domain'], '')}）"
-                           if t['domain'] else '业务分类：（不限）')
+            if t['domain'] == _UNCLASSIFIED_DOMAIN:
+                domain_text = '业务分类：未分类（暂无业务域标注，围绕锚点表自身的业务内容出题）'
+            elif t['domain']:
+                domain_text = f"业务分类：{t['domain']}（{self._domain_names.get(t['domain'], '')}）"
+            else:
+                domain_text = '业务分类：（不限）'
             task_blocks.append(
                 f"【任务{i}】{domain_text}；题型：{t['qtype']}；难度：{t['diff']}\n"
                 f"{t['digest']}\n【可参考的真实条件值（来自码值库治理资产/业务库采样，可选用，也可不用）】\n{samples_text}")
@@ -559,6 +584,7 @@ class QuestionGenerator:
                 'tags': [tasks[min(i, len(tasks) - 1)]['qtype']],
                 'tables_involved': tables or fallback_anchors,
                 'sampled_values': tasks[min(i, len(tasks) - 1)]['samples'],
+                'domain': tasks[min(i, len(tasks) - 1)]['domain'],
             })
         return accepted
 
@@ -647,14 +673,21 @@ class QuestionGenerator:
         return True
 
     def save_to_qa_pairs(self, candidate: Dict) -> int:
-        """将生成的自然语言题目持久化到 qa_pairs 表，标准 SQL 留空，等待后续回流。"""
+        """将生成的自然语言题目持久化到 qa_pairs 表，标准 SQL 留空，等待后续回流。
+
+        同时持久化 objects_involved / domain_l2：覆盖感知调度（表级 + 域级）以这两列
+        为重启后的统计来源，只在内存增量更新会导致重启后权重失真、覆盖轮转失效。"""
+        domain = candidate.get('domain')
+        domain_l2 = None if domain in (None, _UNCLASSIFIED_DOMAIN) else domain
+        tables_involved = candidate.get('tables_involved', [])
         with self.db.connect_governance() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO qa_pairs (
                     question, standard_sql, difficulty, source, tags,
-                    generation_method, ingest_time, is_usable
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    generation_method, ingest_time, is_usable,
+                    objects_involved, domain_l2
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     candidate['question'],
@@ -665,13 +698,17 @@ class QuestionGenerator:
                     'schema-driven',
                     datetime.now().isoformat(),
                     0,  # 新生成题目默认可用性为 0，需经人工评价为“合理”后才进入 RAG/去重池
+                    json.dumps(tables_involved, ensure_ascii=False),
+                    domain_l2,
                 )
             )
             conn.commit()
             new_id = cursor.lastrowid
         # 覆盖计数与去重缓存增量更新（不入库的题目在弹出时已占位，这里幂等）
-        for t in candidate.get('tables_involved', []):
+        for t in tables_involved:
             self._coverage[t] = self._coverage.get(t, 0) + 1
+        if domain_l2:
+            self._domain_coverage[domain_l2] = self._domain_coverage.get(domain_l2, 0) + 1
         self._register_question(candidate['question'])
         return new_id
 

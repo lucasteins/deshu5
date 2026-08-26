@@ -65,16 +65,17 @@ DEFAULT_CONCEPT_TO_TABLES = {
 
 class RuleBasedIntentParser:
     """基于规则的意图解析器"""
-    
-    def __init__(self):
+
+    def __init__(self, concept_map: dict = None):
         self.kb = SchemaKnowledgeBase()
         self.column_comments = self.kb.get_column_comments()
-        self._init_keyword_maps()
-    
-    def _init_keyword_maps(self):
-        """初始化关键词映射（P2：优先读治理库 keyword_table_map，空表/异常回退代码常量）"""
+        self._init_keyword_maps(concept_map)
+
+    def _init_keyword_maps(self, concept_map: dict = None):
+        """初始化关键词映射（概念映射优先用传入值——本体层概念面；
+        否则读治理库 keyword_table_map，空表/异常回退代码常量）"""
         # 业务概念 -> 表名
-        self.concept_to_tables = get_keyword_table_map('intent') or DEFAULT_CONCEPT_TO_TABLES
+        self.concept_to_tables = concept_map or get_keyword_table_map('intent') or DEFAULT_CONCEPT_TO_TABLES
         
         # 聚合词
         self.agg_keywords = {
@@ -793,9 +794,10 @@ class LLMIntentParser:
 
 class IntentParser:
     """意图解析器：规则 + LLM 双层解析"""
-    
-    def __init__(self):
-        self.rule_parser = RuleBasedIntentParser()
+
+    def __init__(self, concept_map: dict = None):
+        # concept_map：本体层概念面注入（ontology 档）；None 时规则解析器自行读治理库/常量
+        self.rule_parser = RuleBasedIntentParser(concept_map=concept_map)
         self.llm_parser = LLMIntentParser()
         self.kb = SchemaKnowledgeBase()
         self.rag = RAGRetriever(top_k=3)

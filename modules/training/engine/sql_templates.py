@@ -26,8 +26,10 @@ _COL_VALS_CACHE = {}
 
 class SQLTemplateMatcher:
     """基于问题模板的 SQL 生成器"""
-    
-    def __init__(self):
+
+    def __init__(self, concept_map: dict = None):
+        # concept_map：本体层概念面注入（ontology 档）；None 时签名守卫自行读治理库/常量
+        self._concept_map = concept_map
         self.templates = self._build_templates()
     
     def _build_templates(self) -> List[Dict]:
@@ -196,7 +198,7 @@ class SQLTemplateMatcher:
         from core.knowledge_retriever import retrieve
         # top_k 给足（≥全表行数）：签名候选需全量进入填充尝试（原实现遍历全部过守卫模板，
         # 检索层 top_k 截断只影响注入类消费方，不能截掉模板候选）
-        res = retrieve(question, top_k=500)
+        res = retrieve(question, top_k=500, concept_map=self._concept_map)
         candidates = [it for it in res['items']
                       if it.get('item_type') == 'template' and it.get('signature_score', 0) > 0]
         if not candidates:
@@ -336,14 +338,10 @@ class SQLTemplateMatcher:
         try:
             db = DatabaseManager()
             with db.connect_business() as conn:
-                if db.get_dialect() == 'mysql':
-                    cursor = conn.execute(
-                        'SELECT DISTINCT TABLE_NAME FROM information_schema.COLUMNS '
-                        'WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = ?', (col,))
-                    have = {r[0] for r in cursor.fetchall()}
-                else:
-                    have = {t for t in tables
-                            if any(c['name'] == col for c in db.get_table_columns(conn, t))}
+                cursor = conn.execute(
+                    'SELECT DISTINCT TABLE_NAME FROM information_schema.COLUMNS '
+                    'WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = ?', (col,))
+                have = {r[0] for r in cursor.fetchall()}
                 hit = next((t for t in tables if t in have), None)
         except Exception:
             hit = None
@@ -359,15 +357,14 @@ class SQLTemplateMatcher:
                 try:
                     db = DatabaseManager()
                     with db.connect_business() as conn:
-                        if db.get_dialect() == 'mysql':
-                            # 不用 LIKE '%_ym'：pymysql 带参执行会对 SQL 字面 % 做格式化
-                            cursor = conn.execute(
-                                "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
-                                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? "
-                                "AND (COLUMN_NAME = 'data_date' OR SUBSTRING(COLUMN_NAME, -3) = '_ym') "
-                                "ORDER BY COLUMN_NAME LIMIT 1", (t,))
-                            row = cursor.fetchone()
-                            col = row[0] if row else None
+                        # 不用 LIKE '%_ym'：pymysql 带参执行会对 SQL 字面 % 做格式化
+                        cursor = conn.execute(
+                            "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+                            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? "
+                            "AND (COLUMN_NAME = 'data_date' OR SUBSTRING(COLUMN_NAME, -3) = '_ym') "
+                            "ORDER BY COLUMN_NAME LIMIT 1", (t,))
+                        row = cursor.fetchone()
+                        col = row[0] if row else None
                 except Exception:
                     col = None
                 _COL_TABLE_CACHE[key] = col
@@ -444,12 +441,9 @@ class SQLTemplateMatcher:
         return m.group(1), f'{int(m.group(2)):02d}', (f'{int(m.group(3)):02d}' if m.group(3) else None)
 
     @staticmethod
-    def _normalize_for_dialect(sql: str, dialect: str) -> str:
-        """骨架以 SQLite 方言存储（金标快照侧挖掘）；当前为 MySQL 时转 DATE_FORMAT。
-        （与 sql_generator._normalize_sql_dialect 的 mysql 分支同口径，此处独立一份避免反向依赖）"""
-        if dialect != 'mysql':
-            return sql
-
+    def _normalize_for_dialect(sql: str) -> str:
+        """骨架以 strftime 风格存储（金标快照侧挖掘）；执行前统一转为 MySQL DATE_FORMAT。
+        （与 sql_generator._normalize_sql_dialect 同口径，此处独立一份避免反向依赖）"""
         def _replace(match):
             return f"DATE_FORMAT({match.group(2).strip()}, '{match.group(1)}')"
         return re.sub(r"strftime\s*\(\s*['\"]([^'\"]+)['\"]\s*,\s*([^)]+)\s*\)",
@@ -462,7 +456,7 @@ class SQLTemplateMatcher:
         try:
             db = DatabaseManager()
             test_sql = re.sub(r'\s+LIMIT\s+\d+\s*$', '', sql.rstrip(';').strip(), flags=re.IGNORECASE)
-            test_sql = self._normalize_for_dialect(test_sql, db.get_dialect()) + ' LIMIT 1'
+            test_sql = self._normalize_for_dialect(test_sql) + ' LIMIT 1'
             with db.connect_business() as conn:
                 conn.execute(test_sql)
             return True

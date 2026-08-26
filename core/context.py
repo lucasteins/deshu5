@@ -23,6 +23,12 @@ def get_schema_preloader():
     return SchemaPreloader.get_instance()
 
 
+def get_ontology_service():
+    """本体服务单例（惰性，模块内延迟导入避免循环依赖）。"""
+    from core.ontology.service import OntologyService
+    return OntologyService.get_instance()
+
+
 def switch_database(profile: str) -> dict:
     """运行时切换数据库档位（生产/暂存），并失效全部缓存对象。
 
@@ -66,11 +72,17 @@ def switch_database(profile: str) -> dict:
     except Exception as e:
         print(f"[WARN] 训练模块缓存重置失败: {e}")
 
+    # 本体服务：失效后从新档位本体库重载/引导（本体表随治理档位隔离）
+    try:
+        get_ontology_service().invalidate()
+    except Exception as e:
+        print(f"[WARN] 本体服务缓存重置失败: {e}")
+
     return current
 
 
 def warmup():
-    """启动预热：Schema 预加载 + RAG 分词/检索缓存。失败仅告警不阻断启动。"""
+    """启动预热：Schema 预加载 + RAG 分词/检索缓存 + 本体加载与漂移检测。失败仅告警不阻断启动。"""
     try:
         get_schema_preloader().preload()
     except Exception as e:
@@ -81,3 +93,10 @@ def warmup():
         schema_loader.load_schema()
     except Exception as e:
         print(f"[WARN] RAG/Schema 预热失败: {e}")
+    # 本体：加载已生效版本（空库则首次引导构建 v1）+ 一次结构漂移检测（有漂移生成 pending 提案）
+    try:
+        svc = get_ontology_service()
+        svc._ensure_loaded()
+        svc.drift_check(auto_propose=True)
+    except Exception as e:
+        print(f"[WARN] 本体加载/漂移检测失败: {e}")

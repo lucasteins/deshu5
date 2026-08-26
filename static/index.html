@@ -22,6 +22,7 @@
             <a href="#" class="nav-item" data-mode="stats" onclick="switchMode('stats')">统计看板</a>
             <a href="#" class="nav-item" data-mode="resource" onclick="switchMode('resource')">数据资源</a>
             <a href="#" class="nav-item" data-mode="provision" onclick="switchMode('provision')">素材提资</a>
+            <a href="#" class="nav-item" data-mode="ontology" onclick="switchMode('ontology')">本体模型</a>
         </div>
         <button class="settings-btn" id="settings-btn" onclick="openSettings()" title="设置">⚙ 设置</button>
     </nav>
@@ -805,11 +806,171 @@
                 <div id="pv-execute-result"></div>
             </div>
 
-            <!-- ④ 复核队列 -->
+            <!-- ④ 复核队列（含历史 run：进入页面即加载有 pending 的批次） -->
             <div class="pv-block" id="pv-review-block" style="display:none">
                 <h3>人工复核队列（pending）</h3>
+                <div class="pv-upload-row" style="margin-bottom:8px">
+                    <select class="filter-select" id="pv-review-run" onchange="onReviewRunChange()"></select>
+                    <input type="text" id="pv-review-filter" class="search-input" style="flex:1"
+                           placeholder="过滤：目标表/字段/值关键字" oninput="filterReviewRows()">
+                </div>
                 <div id="pv-review"></div>
                 <button class="btn btn-secondary" id="pv-finish-btn" onclick="finishProvision()">完成本批次</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 本体模型 -->
+    <section id="mode-ontology" class="mode-section">
+        <div class="stats-card">
+            <!-- 变更审批横幅：检测到底座结构漂移且有 pending 提案时显示 -->
+            <div id="onto-drift-banner" style="display:none; padding:10px 14px; margin-bottom:12px;
+                 border:1px solid #d48806; border-radius:8px; background:#fffbe6;">
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <strong>⚠ 基础表结构已变化</strong>
+                    <span class="hint" id="onto-drift-text" style="margin:0"></span>
+                    <button class="btn btn-sm btn-secondary" onclick="ontoShowPendingProposal()">查看变更明细</button>
+                    <button class="btn btn-sm btn-primary" onclick="ontoDecide('approve')">批准更新</button>
+                    <button class="btn btn-sm btn-secondary" onclick="ontoDecide('reject')">驳回</button>
+                </div>
+                <div id="onto-diff-detail" style="display:none; margin-top:10px; font-size:12px; max-height:320px; overflow-y:auto;"></div>
+            </div>
+
+            <!-- 工具行 -->
+            <div class="filter-bar">
+                <div class="filter-controls">
+                    <span class="hint" id="onto-version" style="margin:0"></span>
+                    <select class="filter-select" id="onto-export-fmt">
+                        <option value="owl">OWL (RDF/XML)</option>
+                        <option value="ttl" selected>Turtle (.ttl)</option>
+                        <option value="nt">N-Triples (.nt)</option>
+                        <option value="jsonld">JSON-LD (.jsonld)</option>
+                    </select>
+                    <button class="btn btn-sm btn-primary" onclick="ontoExport()">导出本体</button>
+                    <button class="btn btn-sm btn-secondary" onclick="ontoCheckDrift()">检测变更</button>
+                    <button class="btn btn-sm btn-secondary" onclick="ontoRebuild()">手动重建</button>
+                </div>
+            </div>
+
+            <!-- 总览卡片 -->
+            <div class="stats-grid" id="onto-summary" style="margin-bottom:14px;"></div>
+
+            <!-- 子页签 -->
+            <div class="sub-tabs">
+                <a href="#" class="sub-tab active" data-otab="entities" onclick="switchOntoTab('entities');return false;">实体视图</a>
+                <a href="#" class="sub-tab" data-otab="egraph" onclick="switchOntoTab('egraph');return false;">实体图谱</a>
+                <a href="#" class="sub-tab" data-otab="classes" onclick="switchOntoTab('classes');return false;">物理表</a>
+                <a href="#" class="sub-tab" data-otab="relations" onclick="switchOntoTab('relations');return false;">关系</a>
+                <a href="#" class="sub-tab" data-otab="enums" onclick="switchOntoTab('enums');return false;">码值枚举</a>
+                <a href="#" class="sub-tab" data-otab="concepts" onclick="switchOntoTab('concepts');return false;">业务概念</a>
+                <a href="#" class="sub-tab" data-otab="proposals" onclick="switchOntoTab('proposals');return false;">变更提案</a>
+            </div>
+
+            <!-- 实体视图（精炼层：主数据/业务数据/统计报表） -->
+            <div class="stats-tab active" id="otab-entities">
+                <div class="filter-bar">
+                    <div class="filter-controls">
+                        <select class="filter-select" id="onto-entity-layer" onchange="renderOntoEntities()">
+                            <option value="">全部层级</option>
+                            <option value="master">主数据</option>
+                            <option value="business">业务数据</option>
+                            <option value="report">统计报表</option>
+                        </select>
+                        <input type="text" class="search-input" id="onto-entity-search"
+                            placeholder="搜索实体或成员表" oninput="renderOntoEntities()">
+                        <span class="hint" id="onto-entity-count" style="margin:0"></span>
+                    </div>
+                </div>
+                <div class="catalog-grid" id="onto-entity-grid"></div>
+                <div id="onto-entity-detail" style="display:none; margin-top:12px;"></div>
+            </div>
+
+            <!-- 实体图谱（力导向图：实体节点 + 实体间关系） -->
+            <div class="stats-tab" id="otab-egraph">
+                <div class="graph-toolbar">
+                    <span class="lg og-layer-btn" id="og-layer-master" onclick="ontoGraphToggleLayer('master')" title="点击显示/隐藏主数据实体"><span class="sw sw-master"></span>主数据</span>
+                    <span class="lg og-layer-btn" id="og-layer-business" onclick="ontoGraphToggleLayer('business')" title="点击显示/隐藏业务数据实体"><span class="sw sw-business"></span>业务数据</span>
+                    <span class="lg og-layer-btn" id="og-layer-report" onclick="ontoGraphToggleLayer('report')" title="点击显示/隐藏统计报表实体"><span class="sw sw-report"></span>统计报表</span>
+                    <input type="text" id="onto-graph-search" placeholder="搜索实体（名称/中文名）"
+                        list="onto-graph-nl" oninput="ontoGraphSearch()">
+                    <datalist id="onto-graph-nl"></datalist>
+                    <button class="btn btn-sm btn-secondary" onclick="ontoGraphReset()">重置</button>
+                    <button class="btn btn-sm btn-secondary" id="onto-graph-unhide" style="display:none" onclick="ontoGraphUnhideAll()">恢复隐藏(0)</button>
+                    <span class="hint" id="onto-graph-res" style="margin:0"></span>
+                </div>
+                <div class="graph-wrap">
+                    <canvas id="onto-graph-canvas"></canvas>
+                    <div id="onto-graph-tip"></div>
+                </div>
+                <div id="onto-graph-detail" style="display:none; margin-top:12px;"></div>
+            </div>
+
+            <!-- 类浏览 -->
+            <div class="stats-tab" id="otab-classes">
+                <div class="filter-bar">
+                    <div class="filter-controls">
+                        <input type="text" class="search-input" id="onto-class-search"
+                            placeholder="搜索表名或中文注释" oninput="renderOntoClasses()">
+                        <select class="filter-select" id="onto-class-kind" onchange="renderOntoClasses()">
+                            <option value="">全部类型</option>
+                            <option value="dimension">维度 Dimension</option>
+                            <option value="fact">事实 Fact</option>
+                            <option value="other">其他</option>
+                        </select>
+                        <span class="hint" id="onto-class-count" style="margin:0"></span>
+                    </div>
+                </div>
+                <div class="catalog-grid" id="onto-class-grid"></div>
+                <div id="onto-class-detail" style="display:none; margin-top:12px;"></div>
+            </div>
+
+            <!-- 关系 -->
+            <div class="stats-tab" id="otab-relations">
+                <div class="filter-bar">
+                    <div class="filter-controls">
+                        <select class="filter-select" id="onto-rel-source" onchange="renderOntoRelations()">
+                            <option value="">全部来源</option>
+                            <option value="physical_fk">物理外键</option>
+                            <option value="governance_doc">治理文档</option>
+                            <option value="both">双源一致</option>
+                        </select>
+                        <input type="text" class="search-input" id="onto-rel-search"
+                            placeholder="搜索表名" oninput="renderOntoRelations()">
+                        <span class="hint" id="onto-rel-count" style="margin:0"></span>
+                    </div>
+                </div>
+                <div id="onto-rel-list"></div>
+            </div>
+
+            <!-- 码值枚举 -->
+            <div class="stats-tab" id="otab-enums">
+                <div class="filter-bar">
+                    <div class="filter-controls">
+                        <input type="text" class="search-input" id="onto-enum-search"
+                            placeholder="搜索码值域（中文名/英文名/业务域）" oninput="renderOntoEnums()">
+                        <span class="hint" id="onto-enum-count" style="margin:0"></span>
+                    </div>
+                </div>
+                <div class="code-catalog" id="onto-enum-list"></div>
+                <div id="onto-enum-detail" style="display:none; margin-top:12px;"></div>
+            </div>
+
+            <!-- 业务概念 -->
+            <div class="stats-tab" id="otab-concepts">
+                <div class="filter-bar">
+                    <div class="filter-controls">
+                        <input type="text" class="search-input" id="onto-concept-search"
+                            placeholder="搜索概念词或表名" oninput="renderOntoConcepts()">
+                        <span class="hint" id="onto-concept-count" style="margin:0"></span>
+                    </div>
+                </div>
+                <div id="onto-concept-list"></div>
+                <div id="onto-synonym-block" style="margin-top:14px;"></div>
+            </div>
+
+            <!-- 变更提案历史 -->
+            <div class="stats-tab" id="otab-proposals">
+                <div id="onto-proposal-list"></div>
             </div>
         </div>
     </section>
@@ -818,5 +979,6 @@
 <script src="js/resource.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/provision.js"></script>
+<script src="js/ontology.js"></script>
 </body>
 </html>

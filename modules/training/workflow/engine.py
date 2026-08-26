@@ -23,6 +23,7 @@ DEFAULTS 逐键等于 config.py / 生成代码现值（merged 调优态）；预
 - fallback.draft        草稿兜底开关                intent_draft_fallback 分支
 - fallback.v24          v2.4 回退通道开关           _generate_impl 的 v2.4 分支
 - rag.top_k             RAG 召回条数                __init__ 构造 RAGRetriever（原 config.RAG_TOP_K=5）
+- knowledge.source      知识来源                    'ontology'（本体层，默认）/ 'legacy'（底座直读，回退档）
 """
 import copy
 import json
@@ -69,6 +70,14 @@ DEFAULTS = {
     },
     'rag': {
         'top_k': getattr(config, 'RAG_TOP_K', 5),
+    },
+    'knowledge': {
+        # 知识来源：ontology = 本体层（marketing_ontology 库已生效版本）；
+        # legacy = 数据底座直读（SchemaPreloader / 治理库，回退档）
+        'source': getattr(config, 'KNOWLEDGE_SOURCE', 'ontology'),
+        # 报表层优先：省/市/县三级统计语义问题优先检索本体 report 层实体（统计报表），
+        # 无命中回退明细层汇总
+        'report_first': getattr(config, 'KNOWLEDGE_REPORT_FIRST', True),
     },
 }
 

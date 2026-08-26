@@ -1,15 +1,10 @@
 # -*- coding: utf-8 -*-
 """Schema 知识库：构建和检索表结构、字段语义、表关系、SQL 模式"""
 import os
-
-# Schema 知识库存储在 SQLite governance.db 中
-os.environ.setdefault('DB_TYPE', 'sqlite')
-
 import json
 import re
 import sys
 from typing import Dict, List, Any, Optional, Set, Tuple
-from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -92,42 +87,37 @@ class SchemaKnowledgeBase:
         self._init_tables()
     
     def _init_tables(self):
-        """初始化知识库表（兼容 SQLite / MySQL）"""
-        is_mysql = self.db.get_dialect() == 'mysql'
-        int_type = 'INT' if is_mysql else 'INTEGER'
-        auto_inc = 'AUTO_INCREMENT' if is_mysql else 'AUTOINCREMENT'
-        bool_type = 'TINYINT(1)' if is_mysql else 'BOOLEAN'
-
+        """初始化知识库表（MySQL 方言）"""
         with self.db.connect_governance() as conn:
             # 2026-08-19 精简：doc_json（table/relationship）、top_values（column）已删除
-            conn.execute(f'''
+            conn.execute('''
                 CREATE TABLE IF NOT EXISTS schema_table_docs (
-                    id {int_type} PRIMARY KEY {auto_inc},
+                    id INT PRIMARY KEY AUTO_INCREMENT,
                     table_name VARCHAR(128) UNIQUE,
                     table_comment VARCHAR(255),
-                    row_count {int_type},
-                    column_count {int_type},
+                    row_count INT,
+                    column_count INT,
                     doc_text TEXT,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
 
-            conn.execute(f'''
+            conn.execute('''
                 CREATE TABLE IF NOT EXISTS schema_column_docs (
-                    id {int_type} PRIMARY KEY {auto_inc},
+                    id INT PRIMARY KEY AUTO_INCREMENT,
                     table_name VARCHAR(128),
                     column_name VARCHAR(128),
                     column_comment VARCHAR(255),
                     data_type VARCHAR(64),
-                    is_pk {bool_type},
+                    is_pk TINYINT(1),
                     doc_text TEXT,
                     UNIQUE(table_name, column_name)
                 )
             ''')
 
-            conn.execute(f'''
+            conn.execute('''
                 CREATE TABLE IF NOT EXISTS schema_relationship_docs (
-                    id {int_type} PRIMARY KEY {auto_inc},
+                    id INT PRIMARY KEY AUTO_INCREMENT,
                     title VARCHAR(255),
                     path TEXT,
                     join_conditions TEXT,
@@ -137,24 +127,7 @@ class SchemaKnowledgeBase:
             ''')
 
             # 2026-08-15：sql_patterns 已并入 sql_knowledge（kind='template'），
-            # 旧表归档 marketing_log._bak_20260815_sql_patterns（见 _knowledge_merge.py）。
-            # 下方建表与 build_sql_patterns 仅保留给 SQLite 开发库一键构建路径；
-            # MySQL 模式不再创建该表（避免应用启动时把已归档旧表重建回来）。
-            if not is_mysql:
-                conn.execute(f'''
-                    CREATE TABLE IF NOT EXISTS sql_patterns (
-                        id {int_type} PRIMARY KEY {auto_inc},
-                        pattern_type VARCHAR(64),
-                        pattern_name VARCHAR(255),
-                        table_path TEXT,
-                        aggregation_pattern TEXT,
-                        filter_pattern TEXT,
-                        order_limit_pattern TEXT,
-                        related_question_ids TEXT,
-                        doc_text TEXT,
-                        doc_json TEXT
-                    )
-                ''')
+            # 旧表归档 marketing_log._bak_20260815_sql_patterns（见 _knowledge_merge.py），不再建表。
             conn.commit()
     
     def build_all(self):
@@ -659,35 +632,22 @@ class SchemaKnowledgeBase:
     def get_table_names(self) -> List[str]:
         """获取所有表名。
 
-        MySQL 模式权威源 = 业务库 information_schema（经 SchemaPreloader 单例缓存）；
-        SQLite 模式保持 governance.schema_table_docs 文档路径不变。
+        权威源 = 业务库 information_schema（经 SchemaPreloader 单例缓存）。
         """
-        if self.db.get_dialect() == 'mysql':
-            from core.schema_preloader import SchemaPreloader
-            return SchemaPreloader.get_instance().get_table_names()
-        with self.db.connect_governance() as conn:
-            cursor = conn.execute('SELECT table_name FROM schema_table_docs ORDER BY table_name')
-            return [row[0] for row in cursor.fetchall()]
-    
+        from core.schema_preloader import SchemaPreloader
+        return SchemaPreloader.get_instance().get_table_names()
+
     def get_column_comments(self) -> Dict[str, Dict[str, str]]:
         """获取所有字段注释。
 
-        MySQL 模式权威源 = 业务库 information_schema（经 SchemaPreloader 单例缓存）；
-        SQLite 模式保持 governance.schema_column_docs 文档路径不变。
+        权威源 = 业务库 information_schema（经 SchemaPreloader 单例缓存）。
         """
-        if self.db.get_dialect() == 'mysql':
-            from core.schema_preloader import SchemaPreloader
-            preloader = SchemaPreloader.get_instance()
-            return {
-                t: {c['name']: c.get('comment') or '' for c in preloader.get_columns(t)}
-                for t in preloader.get_table_names()
-            }
-        result = defaultdict(dict)
-        with self.db.connect_governance() as conn:
-            cursor = conn.execute('SELECT table_name, column_name, column_comment FROM schema_column_docs')
-            for row in cursor.fetchall():
-                result[row[0]][row[1]] = row[2]
-        return dict(result)
+        from core.schema_preloader import SchemaPreloader
+        preloader = SchemaPreloader.get_instance()
+        return {
+            t: {c['name']: c.get('comment') or '' for c in preloader.get_columns(t)}
+            for t in preloader.get_table_names()
+        }
 
 
 def build_schema_kb():

@@ -82,7 +82,6 @@ class DirectSchemaSQLGenerator:
 
         # 4. 提取并校验 SQL
         sql = self._extract_sql(raw_content)
-        sql = self._normalize_sql_dialect(sql)
         valid = self._validate_sql(sql)
         tables = self._extract_tables_from_sql(sql)
 
@@ -137,13 +136,8 @@ class DirectSchemaSQLGenerator:
         return '\n'.join(lines)
 
     def _build_prompt(self, user_question: str, schema_context: str) -> str:
-        dialect = self.db.get_dialect()
-        date_hint = (
-            "日期过滤请使用 strftime('%Y-%m', date_col) = 'YYYY-MM' 或 BETWEEN 语法。"
-            if dialect == 'sqlite' else
-            "日期过滤请使用 DATE_FORMAT(date_col, '%Y-%m') = 'YYYY-MM' 或 BETWEEN 语法。"
-        )
-        return f"""你是电力营销数据仓库的 SQL 专家。请严格依据下方数据库 Schema 生成一条可执行的 {dialect.upper()} SELECT 语句。
+        date_hint = "日期过滤请使用 DATE_FORMAT(date_col, '%Y-%m') = 'YYYY-MM' 或 BETWEEN 语法。"
+        return f"""你是电力营销数据仓库的 SQL 专家。请严格依据下方数据库 Schema 生成一条可执行的 MySQL SELECT 语句。
 
 【业务说明】
 本库为电力营销 4.0 共享层，核心数据链：
@@ -224,8 +218,7 @@ class DirectSchemaSQLGenerator:
         lines = content.split('\n')
         sql_lines = []
         in_sql = False
-        dialect = self.db.get_dialect()
-        allowed_prefixes = ['SELECT', 'WITH'] if dialect == 'mysql' else ['SELECT', 'WITH', 'PRAGMA']
+        allowed_prefixes = ['SELECT', 'WITH']
         for line in lines:
             stripped = line.strip()
             if not stripped:
@@ -241,19 +234,6 @@ class DirectSchemaSQLGenerator:
             sql = re.sub(r'\s+', ' ', sql)
             return sql.strip()
         return ''
-
-    def _normalize_sql_dialect(self, sql: str) -> str:
-        if not sql:
-            return sql
-        dialect = self.db.get_dialect()
-        if dialect == 'sqlite':
-            def replace_date_format(match):
-                col = match.group(1).strip()
-                fmt = match.group(2)
-                sqlite_fmt = fmt.replace('%Y', '%Y').replace('%m', '%m').replace('%d', '%d')
-                return f"strftime('{sqlite_fmt}', {col})"
-            sql = re.sub(r"DATE_FORMAT\s*\(\s*([^,]+),\s*'([^']+)'\s*\)", replace_date_format, sql, flags=re.IGNORECASE)
-        return sql
 
     def _validate_sql(self, sql: str) -> bool:
         if not sql:

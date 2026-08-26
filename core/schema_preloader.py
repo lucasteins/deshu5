@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Schema 预加载器：元数据加载（MySQL 模式以业务库 information_schema 为权威），注入全局上下文。
+"""Schema 预加载器：元数据加载（以业务库 information_schema 为权威），注入全局上下文。
 
 职责：
-1. 元数据权威来源（MySQL 模式）= 业务库 marketing_40 的 information_schema：
+1. 元数据权威来源 = 业务库 marketing_40 的 information_schema：
    表/列中文注释随物理表 COMMENT 落库，表名/注释/行数/字段/类型/主键直接读取；
    主外键关系 = 物理外键图（information_schema.key_column_usage，合法 JOIN 边的权威）
    ∪ 治理库（marketing_governance）schema_relationship_docs 的业务语义/逻辑关系，
    双源合并、冲突以物理外键为准（见 _merge_relationships）。
-   SQLite 模式保持原路径：治理库 schema_*_docs 文档为权威来源。
 2. DDL 文件（35张营销共享层表_重构版v2.0_20260519.sql 等）仅用于初次导入或
    preload(force=True) 显式刷新：解析文件 → 重写 governance 库文档（文档落库链路不变）。
 3. 在内存中维护全局 Schema 上下文，供 SQLGenerator / QuestionGenerator / SQLReviewer 快速获取。
@@ -259,63 +258,8 @@ class DDLSchemaParser:
             })
 
 
-class MetadataDictionaryParser:
-    """从 SQLite 元数据字典（.db）读取表/字段中文注释。"""
-
-    def __init__(self, db_path: str):
-        self.db_path = db_path
-        self.tables: Dict[str, Dict] = {}
-        self.relationships: List[Dict] = []
-        self._parse()
-
-    def _parse(self):
-        if not os.path.exists(self.db_path):
-            raise FileNotFoundError(f'元数据字典不存在: {self.db_path}')
-
-        import sqlite3
-        conn = sqlite3.connect(self.db_path)
-        try:
-            # 读取表级信息
-            table_meta: Dict[str, Dict] = {}
-            for row in conn.execute('SELECT table_name, table_comment, column_count, pk_fields FROM tables'):
-                table_name, table_comment, column_count, pk_fields = row
-                table_meta[table_name] = {
-                    'comment': (table_comment or '').strip(),
-                    'column_count': column_count,
-                    'pk_fields': [c.strip() for c in (pk_fields or '').split(',') if c.strip()],
-                }
-
-            # 读取字段级信息
-            col_groups: Dict[str, List[Dict]] = defaultdict(list)
-            for row in conn.execute(
-                'SELECT table_name, column_name, column_comment, data_type, is_pk FROM columns '
-                'ORDER BY table_name, id'
-            ):
-                table_name, column_name, column_comment, data_type, is_pk = row
-                is_pk_flag = str(is_pk).strip() in ('是', 'YES', 'Y', '1', 'True', 'true')
-                col_groups[table_name].append({
-                    'name': column_name,
-                    'type': (data_type or '').upper(),
-                    'comment': (column_comment or '').strip(),
-                    'pk': is_pk_flag,
-                })
-
-            for table_name, meta in table_meta.items():
-                columns = col_groups.get(table_name, [])
-                pk_cols = meta['pk_fields'] or [c['name'] for c in columns if c['pk']]
-                self.tables[table_name] = {
-                    'name': table_name,
-                    'comment': meta['comment'],
-                    'columns': columns,
-                    'pk': pk_cols,
-                    'foreign_keys': [],
-                }
-        finally:
-            conn.close()
-
-
 class _MergedSchema:
-    """合并两个解析结果：表/关系来自精简版 DDL，字段来自元数据字典。"""
+    """合并两个解析结果：表/关系来自精简版 DDL，字段来自完整版 DDL。"""
 
     def __init__(self, tables: Dict[str, Dict], relationships: List[Dict]):
         self.tables = tables
@@ -332,14 +276,8 @@ class SchemaPreloader:
         column_source_path: Optional[str] = None,
         table_ddl_path: Optional[str] = None,
     ):
-        self.column_source_path = column_source_path or getattr(
-            config, 'DDL_COLUMN_DICT_DB',
-            r'D:\codex\deshu4\db\ddl\35张营销共享层表_元数据字典.db'
-        )
-        self.table_ddl_path = table_ddl_path or getattr(
-            config, 'DDL_TABLE_REL_FILE',
-            r'D:\codex\deshu4\db\ddl\35张营销共享层表_重构版v2.0_主外键精简版.sql'
-        )
+        self.column_source_path = column_source_path or config.DDL_SCHEMA_FILE
+        self.table_ddl_path = table_ddl_path or config.DDL_TABLE_REL_FILE
         self.db = DatabaseManager()
         self.parser: Optional[_MergedSchema] = None
         self._global_context: str = ''
@@ -356,41 +294,35 @@ class SchemaPreloader:
         return cls._instance
 
     def _ensure_tables(self):
-        """确保 governance 中 schema 文档表存在（兼容 SQLite / MySQL）。"""
-        is_mysql = self.db.get_dialect() == 'mysql'
-        int_type = 'INT' if is_mysql else 'INTEGER'
-        auto_inc = 'AUTO_INCREMENT' if is_mysql else 'AUTOINCREMENT'
-        bool_type = 'TINYINT(1)' if is_mysql else 'BOOLEAN'
-        now_default = 'CURRENT_TIMESTAMP'  # 两者都支持
-
+        """确保 governance 中 schema 文档表存在（MySQL 方言）。"""
         with self.db.connect_governance() as conn:
             # 2026-08-19 精简：doc_json（table/relationship 文档）、top_values（column 文档）已删除
-            conn.execute(f'''
+            conn.execute('''
                 CREATE TABLE IF NOT EXISTS schema_table_docs (
-                    id {int_type} PRIMARY KEY {auto_inc},
+                    id INT PRIMARY KEY AUTO_INCREMENT,
                     table_name VARCHAR(128) UNIQUE,
                     table_comment VARCHAR(255),
-                    row_count {int_type},
-                    column_count {int_type},
+                    row_count INT,
+                    column_count INT,
                     doc_text TEXT,
-                    updated_at DATETIME DEFAULT {now_default}
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            conn.execute(f'''
+            conn.execute('''
                 CREATE TABLE IF NOT EXISTS schema_column_docs (
-                    id {int_type} PRIMARY KEY {auto_inc},
+                    id INT PRIMARY KEY AUTO_INCREMENT,
                     table_name VARCHAR(128),
                     column_name VARCHAR(128),
                     column_comment VARCHAR(255),
                     data_type VARCHAR(64),
-                    is_pk {bool_type},
+                    is_pk TINYINT(1),
                     doc_text TEXT,
                     UNIQUE(table_name, column_name)
                 )
             ''')
-            conn.execute(f'''
+            conn.execute('''
                 CREATE TABLE IF NOT EXISTS schema_relationship_docs (
-                    id {int_type} PRIMARY KEY {auto_inc},
+                    id INT PRIMARY KEY AUTO_INCREMENT,
                     title VARCHAR(255),
                     path TEXT,
                     join_conditions TEXT,
@@ -403,10 +335,9 @@ class SchemaPreloader:
     def preload(self, force: bool = False) -> Dict:
         """执行预加载，返回统计摘要。
 
-        加载策略（2026-08-12 起）：MySQL 模式下表/列元数据以业务库 information_schema
+        加载策略（2026-08-12 起）：表/列元数据以业务库 information_schema
         为权威来源（注释随物理表 COMMENT 落库），主外键关系 = 物理外键图 ∪ 治理库
-        schema_relationship_docs（冲突以物理外键为准）；SQLite 模式仍以治理库
-        schema_*_docs 文档为权威来源。
+        schema_relationship_docs（冲突以物理外键为准）。
         force=True 或库中无元数据时才回退「DDL 文件解析 → 落库」的初始导入/刷新路径。
         """
         if self.parser is not None and not force:
@@ -414,18 +345,11 @@ class SchemaPreloader:
 
         if not force and self._load_from_db():
             self._global_context = self._build_global_context()
-            if self.db.get_dialect() == 'mysql':
-                print('[SchemaPreloader] 表/列元数据已从业务库 information_schema 加载，'
-                      '关系=物理外键图∪治理关系文档（DB-first，免文件依赖）', flush=True)
-            else:
-                print('[SchemaPreloader] 已从治理库 schema 文档加载（DB-first，免文件依赖）', flush=True)
+            print('[SchemaPreloader] 表/列元数据已从业务库 information_schema 加载，'
+                  '关系=物理外键图∪治理关系文档（DB-first，免文件依赖）', flush=True)
             return self._summary()
 
-        # 字段级信息优先从 SQLite 元数据字典读取；缺失时回退到完整 DDL SQL
-        if self.column_source_path.lower().endswith('.db'):
-            column_parser = MetadataDictionaryParser(self.column_source_path)
-        else:
-            column_parser = DDLSchemaParser(self.column_source_path)
+        column_parser = DDLSchemaParser(self.column_source_path)
         table_parser = DDLSchemaParser(self.table_ddl_path)
         self.parser = self._merge_parsers(column_parser, table_parser)
         self._persist()
@@ -435,16 +359,36 @@ class SchemaPreloader:
     def _load_from_db(self) -> bool:
         """重建内存 Schema（DB 优先路径）。库中无元数据时返回 False。
 
-        MySQL 模式：表/列元数据权威源 = 业务库 information_schema，关系 = 物理外键图
-        ∪ 治理关系文档（冲突以物理外键为准）；SQLite 模式：保持治理库 schema_*_docs
-        文档路径不变（表/列/关系同源）。
+        表/列元数据权威源 = 业务库 information_schema，关系 = 物理外键图
+        ∪ 治理关系文档（冲突以物理外键为准）。
         """
-        if self.db.get_dialect() == 'mysql':
-            return self._load_from_information_schema()
-        return self._load_from_governance_docs()
+        return self._load_from_information_schema()
+
+    def _load_gov_comment_maps(self) -> Tuple[Dict[str, str], Dict[Tuple[str, str], str]]:
+        """治理库文档注释兜底：schema_table_docs / schema_column_docs 的策展中文名。
+
+        业务库 information_schema 注释为权威源，但暂存库等环境物理表可能未落 COMMENT，
+        此时用治理文档补全（仅填空，不覆盖非空注释）。
+        """
+        table_map: Dict[str, str] = {}
+        column_map: Dict[Tuple[str, str], str] = {}
+        try:
+            with self.db.connect_governance() as conn:
+                for t, c in conn.execute(
+                        "SELECT table_name, table_comment FROM schema_table_docs "
+                        "WHERE table_comment IS NOT NULL AND table_comment != ''"):
+                    table_map[t] = c.strip()
+                for t, c, cc in conn.execute(
+                        "SELECT table_name, column_name, column_comment FROM schema_column_docs "
+                        "WHERE column_comment IS NOT NULL AND column_comment != ''"):
+                    column_map[(t, c)] = cc.strip()
+        except Exception as e:
+            print(f'[WARN] 治理库文档注释读取失败（跳过补全）: {e}', flush=True)
+        return table_map, column_map
 
     def _load_from_information_schema(self) -> bool:
-        """MySQL 模式：从业务库 information_schema 重建表/列元数据；关系双源合并。"""
+        """从业务库 information_schema 重建表/列元数据；关系双源合并。
+        注释兜底：物理表 COMMENT 为空时回退治理库 schema_*_docs 策展注释。"""
         try:
             tables: Dict[str, Dict] = {}
             with self.db.connect_business() as conn:
@@ -477,6 +421,19 @@ class SchemaPreloader:
                 })
             if not tables:
                 return False
+            # 治理文档注释兜底（仅填空）：暂存库物理表无 COMMENT 时仍有中文名
+            t_map, c_map = self._load_gov_comment_maps()
+            filled_t = filled_c = 0
+            for name, info in tables.items():
+                if not info['comment'] and name in t_map:
+                    info['comment'] = t_map[name]
+                    filled_t += 1
+                for col in info['columns']:
+                    if not col['comment'] and (name, col['name']) in c_map:
+                        col['comment'] = c_map[(name, col['name'])]
+                        filled_c += 1
+            if filled_t or filled_c:
+                print(f'[SchemaPreloader] 治理文档注释兜底：表 {filled_t} / 列 {filled_c}', flush=True)
             rels = self._merge_relationships(self._load_relationship_docs(), self._load_physical_fks())
             self.parser = _MergedSchema(tables=tables, relationships=rels)
             return True
@@ -484,44 +441,11 @@ class SchemaPreloader:
             print(f'[WARN] 从业务库 information_schema 加载元数据失败，回退 DDL 文件解析: {e}', flush=True)
             return False
 
-    def _load_from_governance_docs(self) -> bool:
-        """SQLite 模式：从治理库 schema_*_docs 重建内存 Schema。库中无文档时返回 False。
-
-        2026-08-19 起 doc_json 列已删除：pk 改由 schema_column_docs.is_pk 聚合推导。"""
-        try:
-            with self.db.connect_governance() as conn:
-                trows = conn.execute(
-                    'SELECT table_name, table_comment FROM schema_table_docs').fetchall()
-                if not trows:
-                    return False
-                crows = conn.execute(
-                    'SELECT table_name, column_name, column_comment, data_type, is_pk '
-                    'FROM schema_column_docs ORDER BY table_name, id').fetchall()
-
-            tables: Dict[str, Dict] = {}
-            for name, comment in trows:
-                tables[name] = {'name': name, 'comment': comment or '', 'columns': [], 'pk': []}
-            for tname, cname, cmt, dtype, is_pk in crows:
-                if tname in tables:
-                    tables[tname]['columns'].append({
-                        'name': cname, 'comment': cmt or '',
-                        'type': dtype or '', 'pk': bool(is_pk),
-                    })
-                    if is_pk:
-                        tables[tname]['pk'].append(cname)
-            if not tables:
-                return False
-            self.parser = _MergedSchema(tables=tables, relationships=self._load_relationship_docs())
-            return True
-        except Exception as e:
-            print(f'[WARN] 从治理库加载 schema 文档失败，回退 DDL 文件解析: {e}', flush=True)
-            return False
-
     def _load_relationship_docs(self) -> List[Dict]:
         """从治理库 schema_relationship_docs 读取关系文档。
 
-        SQLite 模式的唯一关系源；MySQL 模式下作为双源合并的语义源
-        （业务场景/推荐路径/逻辑关系），与物理外键图在 _merge_relationships 合并。
+        作为双源合并的语义源（业务场景/推荐路径/逻辑关系），
+        与物理外键图在 _merge_relationships 合并。
         """
         rels: List[Dict] = []
         with self.db.connect_governance() as conn:
@@ -710,8 +634,6 @@ class SchemaPreloader:
         if parser is None:
             return
 
-        is_mysql = self.db.get_dialect() == 'mysql'
-
         with self.db.connect_governance() as conn:
             # 1) 表文档：保留已有 row_count / column_count，仅补全注释和 doc_text
             for table, info in parser.tables.items():
@@ -722,23 +644,16 @@ class SchemaPreloader:
                     doc_text += f"，中文名：{comment}"
                 doc_text += f"，字段数：{col_count}。"
 
-                if is_mysql:
-                    conn.execute('''
-                        INSERT INTO schema_table_docs
-                        (table_name, table_comment, column_count, doc_text)
-                        VALUES (%s, %s, %s, %s)
-                        ON DUPLICATE KEY UPDATE
-                            table_comment=VALUES(table_comment),
-                            column_count=VALUES(column_count),
-                            doc_text=VALUES(doc_text),
-                            updated_at=CURRENT_TIMESTAMP
-                    ''', (table, comment, col_count, doc_text))
-                else:
-                    conn.execute('''
-                        INSERT OR REPLACE INTO schema_table_docs
-                        (table_name, table_comment, column_count, doc_text)
-                        VALUES (?, ?, ?, ?)
-                    ''', (table, comment, col_count, doc_text))
+                conn.execute('''
+                    INSERT INTO schema_table_docs
+                    (table_name, table_comment, column_count, doc_text)
+                    VALUES (%s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        table_comment=VALUES(table_comment),
+                        column_count=VALUES(column_count),
+                        doc_text=VALUES(doc_text),
+                        updated_at=CURRENT_TIMESTAMP
+                ''', (table, comment, col_count, doc_text))
 
             # 2) 字段文档：以 DDL 注释为准，保留 top_values
             for table, info in parser.tables.items():
@@ -751,23 +666,16 @@ class SchemaPreloader:
                     if col['pk']:
                         doc_text += "，主键"
 
-                    if is_mysql:
-                        conn.execute('''
-                            INSERT INTO schema_column_docs
-                            (table_name, column_name, column_comment, data_type, is_pk, doc_text)
-                            VALUES (%s, %s, %s, %s, %s, %s)
-                            ON DUPLICATE KEY UPDATE
-                                column_comment=VALUES(column_comment),
-                                data_type=VALUES(data_type),
-                                is_pk=VALUES(is_pk),
-                                doc_text=VALUES(doc_text)
-                        ''', (table, col['name'], comment, col['type'], 1 if col['pk'] else 0, doc_text))
-                    else:
-                        conn.execute('''
-                            INSERT OR REPLACE INTO schema_column_docs
-                            (table_name, column_name, column_comment, data_type, is_pk, doc_text)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                        ''', (table, col['name'], comment, col['type'], 1 if col['pk'] else 0, doc_text))
+                    conn.execute('''
+                        INSERT INTO schema_column_docs
+                        (table_name, column_name, column_comment, data_type, is_pk, doc_text)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE
+                            column_comment=VALUES(column_comment),
+                            data_type=VALUES(data_type),
+                            is_pk=VALUES(is_pk),
+                            doc_text=VALUES(doc_text)
+                    ''', (table, col['name'], comment, col['type'], 1 if col['pk'] else 0, doc_text))
 
             # 2.5) 字段/表文档对账：删除解析结果中已不存在的陈旧行（列更名/删列/删表后自动同步）
             current_cols = {(t, c['name']) for t, info in parser.tables.items() for c in info['columns']}
@@ -808,7 +716,6 @@ class SchemaPreloader:
 
     def _fill_missing_column_comments(self):
         """用兜底映射为业务库中 DDL 未覆盖字段补全中文注释。"""
-        is_mysql = self.db.get_dialect() == 'mysql'
         with self.db.connect_governance() as conn:
             cursor = conn.execute(
                 "SELECT table_name, column_name FROM schema_column_docs "
@@ -823,18 +730,11 @@ class SchemaPreloader:
                 if not fallback:
                     fallback = column_name
                 doc_text = f"表 {table_name} 的字段 {column_name}，中文名：{fallback}"
-                if is_mysql:
-                    conn.execute('''
-                        UPDATE schema_column_docs
-                        SET column_comment = %s, doc_text = %s
-                        WHERE table_name = %s AND column_name = %s
-                    ''', (fallback, doc_text, table_name, column_name))
-                else:
-                    conn.execute('''
-                        UPDATE schema_column_docs
-                        SET column_comment = ?, doc_text = ?
-                        WHERE table_name = ? AND column_name = ?
-                    ''', (fallback, doc_text, table_name, column_name))
+                conn.execute('''
+                    UPDATE schema_column_docs
+                    SET column_comment = %s, doc_text = %s
+                    WHERE table_name = %s AND column_name = %s
+                ''', (fallback, doc_text, table_name, column_name))
                 updated += 1
             conn.commit()
             if updated:
@@ -949,7 +849,6 @@ def preload_schema(
 
 
 if __name__ == '__main__':
-    os.environ.setdefault('DB_TYPE', 'sqlite')
     summary = preload_schema(force=True)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     preloader = SchemaPreloader.get_instance()

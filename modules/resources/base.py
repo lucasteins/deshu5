@@ -25,7 +25,7 @@ _FIELD_TYPES = {
 
 
 def rows_to_dicts(cursor) -> list:
-    """把 cursor 结果统一转为 dict 列表（兼容 sqlite3.Row 与 MySQL 元组游标）。"""
+    """把 cursor 结果统一转为 dict 列表（MySQL 元组游标）。"""
     cols = [d[0] for d in cursor.description]
     return [dict(zip(cols, tuple(row))) for row in cursor.fetchall()]
 

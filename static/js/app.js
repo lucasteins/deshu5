@@ -34,6 +34,8 @@ function switchMode(mode) {
     if (mode === 'errors') loadErrorList();
     if (mode === 'qa-lib') loadQALibList();
     if (mode === 'resource') initResourceModule();
+    if (mode === 'ontology') initOntologyModule();
+    if (mode === 'provision') initProvisionPage();
 }
 
 // ==================== 训练模式 ====================

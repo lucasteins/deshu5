@@ -1053,4 +1053,26 @@ body {
 .pv-fail { color: #C05544; }
 .pv-value-input { width: 100%; min-width: 180px; font-size: 12px; padding: 3px 6px; }
 .pv-row-confirmed { opacity: 0.65; background: rgba(120, 180, 110, 0.10); }
+/* 复核优先级分组徽标 */
+.pv-pri { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; margin-right: 8px; border: 1px solid transparent; }
+.pv-pri.pv-pri-high { background: rgba(192, 85, 68, 0.14); border-color: #C05544; color: #C05544; }
+.pv-pri.pv-pri-mid  { background: rgba(230, 160, 90, 0.16); border-color: #E6A05A; color: #B47436; }
+.pv-pri.pv-pri-low  { background: rgba(120, 180, 110, 0.16); border-color: #78B46E; color: #4E8A46; }
+.pv-pri-section h4 { margin: 12px 0 6px; font-size: 14px; }
 .btn-sm { padding: 3px 10px; font-size: 12px; }
+
+/* 本体实体图谱（实体视图二级页签） */
+#onto-graph-canvas { display: block; cursor: grab; }
+#onto-graph-tip {
+    position: fixed; background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 12px; font-size: 0.78rem; pointer-events: none;
+    display: none; box-shadow: var(--shadow-md); z-index: 300; max-width: 320px;
+}
+.sw-master { background: #2F80ED; }
+.sw-business { background: #EB5757; }
+.sw-report { background: #27AE60; }
+
+/* 实体图谱：层级开关按钮（点击隐藏/显示该层实体） */
+.og-layer-btn { cursor: pointer; user-select: none; padding: 2px 6px; border-radius: 6px; }
+.og-layer-btn:hover { background: var(--track); }
+.og-layer-btn.off { opacity: 0.35; text-decoration: line-through; }

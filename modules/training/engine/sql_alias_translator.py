@@ -55,32 +55,17 @@ class SQLAliasTranslator:
         return None
     
     def _load_field_comments(self, tables: List[str]) -> Dict[str, str]:
-        """加载字段注释。
-
-        MySQL 模式权威源 = 业务库 information_schema（经 SchemaPreloader 单例缓存）；
-        SQLite 模式保持 governance.schema_column_docs 文档路径不变。
-        """
+        """加载字段注释（权威源 = 业务库 information_schema，经 SchemaPreloader 单例缓存）。"""
         comments = {}
         if not tables:
             return comments
         try:
-            if self.db.get_dialect() == 'mysql':
-                from core.schema_preloader import SchemaPreloader
-                preloader = SchemaPreloader.get_instance()
-                for table in tables:
-                    for col in preloader.get_columns(table):
-                        if col.get('comment'):
-                            comments[col['name']] = col['comment']
-            else:
-                with self.db.connect_governance() as conn:
-                    placeholders = ','.join(['?'] * len(tables))
-                    cursor = conn.execute(
-                        f'SELECT column_name, column_comment FROM schema_column_docs WHERE table_name IN ({placeholders})',
-                        tuple(tables)
-                    )
-                    for row in cursor.fetchall():
-                        if row[1]:
-                            comments[row[0]] = row[1]
+            from core.schema_preloader import SchemaPreloader
+            preloader = SchemaPreloader.get_instance()
+            for table in tables:
+                for col in preloader.get_columns(table):
+                    if col.get('comment'):
+                        comments[col['name']] = col['comment']
         except Exception:
             pass
         return comments
