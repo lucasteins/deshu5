@@ -15,14 +15,30 @@
     <nav class="nav-bar">
         <div class="nav-brand">智能问数训练系统</div>
         <div class="nav-tabs">
-            <a href="#" class="nav-item active" data-mode="training" onclick="switchMode('training')">训练模式</a>
-            <a href="#" class="nav-item" data-mode="qa" onclick="switchMode('qa')">智能问答</a>
-            <a href="#" class="nav-item" data-mode="qa-lib" onclick="switchMode('qa-lib')">问答对库</a>
-            <a href="#" class="nav-item" data-mode="errors" onclick="switchMode('errors')">错题集</a>
-            <a href="#" class="nav-item" data-mode="stats" onclick="switchMode('stats')">统计看板</a>
-            <a href="#" class="nav-item" data-mode="resource" onclick="switchMode('resource')">数据资源</a>
-            <a href="#" class="nav-item" data-mode="provision" onclick="switchMode('provision')">素材提资</a>
-            <a href="#" class="nav-item" data-mode="ontology" onclick="switchMode('ontology')">本体模型</a>
+            <div class="nav-group active">
+                <button type="button" class="nav-item nav-group-label" onclick="toggleNavGroup(this, event)">问数训练</button>
+                <div class="nav-dropdown">
+                    <a href="#" class="nav-subitem active" data-mode="training" onclick="switchMode('training')">训练模式</a>
+                    <a href="#" class="nav-subitem" data-mode="qa" onclick="switchMode('qa')">智能问答</a>
+                </div>
+            </div>
+            <div class="nav-group">
+                <button type="button" class="nav-item nav-group-label" onclick="toggleNavGroup(this, event)">知识库</button>
+                <div class="nav-dropdown">
+                    <a href="#" class="nav-subitem" data-mode="qa-lib" onclick="switchMode('qa-lib')">问答对库</a>
+                    <a href="#" class="nav-subitem" data-mode="errors" onclick="switchMode('errors')">错题集</a>
+                </div>
+            </div>
+            <div class="nav-group">
+                <button type="button" class="nav-item nav-group-label" onclick="toggleNavGroup(this, event)">数据治理</button>
+                <div class="nav-dropdown">
+                    <a href="#" class="nav-subitem" data-mode="resource" onclick="switchMode('resource')">数据资源</a>
+                    <a href="#" class="nav-subitem" data-mode="provision" onclick="switchMode('provision')">素材提资</a>
+                    <a href="#" class="nav-subitem" data-mode="ontology" onclick="switchMode('ontology')">本体模型</a>
+                    <a href="#" class="nav-subitem" data-mode="stats" onclick="switchMode('stats')">统计看板</a>
+                </div>
+            </div>
+            <a href="#" class="nav-item nav-single" data-mode="report" onclick="switchMode('report')">深度分析</a>
         </div>
         <button class="settings-btn" id="settings-btn" onclick="openSettings()" title="设置">⚙ 设置</button>
     </nav>
@@ -975,10 +991,109 @@
         </div>
     </section>
 
+    <!-- 综合问答/报告生成 -->
+    <section id="mode-report" class="mode-section">
+        <main class="single-main">
+            <div class="sub-tabs" style="margin-bottom:12px;">
+                <a href="#" class="sub-tab active" data-rptab="gen" onclick="switchReportTab('gen');return false;">报告生成</a>
+                <a href="#" class="sub-tab" data-rptab="runs" onclick="switchReportTab('runs');return false;">历史报告</a>
+                <a href="#" class="sub-tab" data-rptab="tpl" onclick="switchReportTab('tpl');return false;">模板管理</a>
+            </div>
+
+            <!-- 报告生成 -->
+            <div class="stats-tab active" id="rptab-gen">
+                <div class="training-card">
+                    <div class="question-section">
+                        <h3>报告生成</h3>
+                        <div class="report-mode-tabs">
+                            <button class="btn btn-sm report-mode-btn active" id="rmode-btn-intent" onclick="switchReportMode('intent')">意图识别</button>
+                            <button class="btn btn-sm report-mode-btn" id="rmode-btn-template" onclick="switchReportMode('template')">选择模板</button>
+                        </div>
+                        <div id="rmode-intent">
+                            <div class="form-group">
+                                <textarea class="form-textarea" id="report-intent" rows="2"
+                                    placeholder="例如：帮我写一份2026年3月杭州公司设备管理月报"></textarea>
+                            </div>
+                            <div class="actions">
+                                <button class="btn btn-secondary" id="btn-report-plan" onclick="makeReportPlan()">匹配模板并分解</button>
+                                <button class="btn btn-generate" id="btn-report-generate" onclick="generateReport()" disabled>生成报告</button>
+                            </div>
+                        </div>
+                        <div id="rmode-template" style="display:none;">
+                            <div class="actions" style="margin-bottom:8px; flex-wrap:wrap;">
+                                <select class="search-input" id="report-template-select" style="max-width:260px;">
+                                    <option value="">— 请选择模板 —</option>
+                                </select>
+                                <input type="text" class="search-input" id="report-period" placeholder="期间，如 2026年3月" style="max-width:160px;">
+                                <input type="text" class="search-input" id="report-org" placeholder="单位，如 杭州公司" style="max-width:160px;">
+                                <button class="btn btn-secondary" onclick="loadTemplateQuestions()">加载问题</button>
+                                <button class="btn btn-generate" id="btn-report-generate-tpl" onclick="generateReport()" disabled>生成报告</button>
+                            </div>
+                            <div class="hint">选择模板并填写期间/单位后加载问题，可在下方编辑，再生成报告。</div>
+                        </div>
+                    </div>
+
+                    <!-- 分解计划预览（可编辑/删除子问题） -->
+                    <div id="report-plan-section" style="display:none; margin-top:14px;">
+                        <h3>分解计划 <span class="hint" id="report-plan-meta"></span></h3>
+                        <div id="report-plan-list"></div>
+                    </div>
+
+                    <!-- 执行进度 -->
+                    <div id="report-progress-section" style="display:none; margin-top:14px;">
+                        <h3>取数进度</h3>
+                        <div id="report-progress-list"></div>
+                    </div>
+
+                    <!-- 报告产物 -->
+                    <div id="report-result-section" style="display:none; margin-top:14px;">
+                        <h3>报告 <span class="hint" id="report-result-meta"></span></h3>
+                        <div class="actions" style="margin-bottom:10px;">
+                            <button class="btn btn-secondary btn-sm" onclick="copyReportMd()">复制 Markdown</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-report-export" onclick="exportReport()">下载 .md</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-report-distill" onclick="distillReportTemplate()">模板提炼</button>
+                        </div>
+                        <div class="report-rendered" id="report-rendered"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 历史报告 -->
+            <div class="stats-tab" id="rptab-runs">
+                <div class="training-card">
+                    <h3>历史报告</h3>
+                    <div id="report-runs-list" class="report-runs-list"></div>
+                </div>
+            </div>
+
+            <!-- 模板管理 -->
+            <div class="stats-tab" id="rptab-tpl">
+                <div class="training-card">
+                    <div id="report-tpl-list"></div>
+                    <h3 style="margin-top:12px;">新增/编辑模板</h3>
+                    <input type="hidden" id="tpl-id">
+                    <div class="form-group"><input type="text" class="search-input" id="tpl-name" placeholder="模板名称，如：设备管理月报" style="width:100%;"></div>
+                    <div class="form-group"><input type="text" class="search-input" id="tpl-triggers" placeholder="触发词（逗号分隔），如：设备管理月报,设备月报" style="width:100%;"></div>
+                    <div class="hint" style="margin:2px 0 6px;">章节与问数问题（保存后自动联动问答对库：新增/变更的题后台自动生成 SQL，删除的题置为无效）</div>
+                    <div id="tpl-sections-editor"></div>
+                    <div class="actions" style="margin-top:6px;">
+                        <button class="btn btn-secondary btn-sm" onclick="tplAddSection()">+ 新增章节</button>
+                    </div>
+                    <div class="form-group"><input type="text" class="search-input" id="tpl-remark" placeholder="备注（可选）" style="width:100%;"></div>
+                    <div class="actions">
+                        <button class="btn btn-generate btn-sm" onclick="saveReportTemplate()">保存模板</button>
+                        <button class="btn btn-secondary btn-sm" onclick="resetReportTemplateForm()">清空</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </section>
+
 <script src="js/app.js"></script>
 <script src="js/resource.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/provision.js"></script>
 <script src="js/ontology.js"></script>
+<script src="js/report.js"></script>
 </body>
 </html>

@@ -392,6 +392,48 @@ def init_code_values_tables():
         conn.commit()
 
 
+def init_report_tables():
+    """报告生成模块：模板表 + 运行历史表（治理库，幂等）"""
+    db = DatabaseManager()
+    with db.connect_governance() as conn:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS report_templates (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                name VARCHAR(128),
+                trigger_words TEXT COMMENT 'JSON 数组，意图命中词',
+                outline TEXT COMMENT 'JSON 数组：[{section_title, hint}]',
+                enabled TINYINT(1) DEFAULT 1,
+                remark VARCHAR(255),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS report_runs (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                session_id VARCHAR(64),
+                intent_text TEXT,
+                template_id INT DEFAULT NULL,
+                plan_json MEDIUMTEXT,
+                detail_json MEDIUMTEXT,
+                report_md MEDIUMTEXT,
+                status VARCHAR(16) DEFAULT 'running',
+                usage_json TEXT,
+                duration_ms INT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ''')
+        try:
+            conn.execute('CREATE INDEX idx_report_runs_created ON report_runs(created_at)')
+        except Exception:
+            pass  # 索引已存在
+        # 问答对 ← 报告模板 联动列：模板问题入库 qa_pairs 时记录来源模板
+        _ensure_columns(conn, 'qa_pairs', {
+            'report_template_id': 'INT DEFAULT NULL',
+        })
+        conn.commit()
+
+
 def import_code_values_if_empty() -> bool:
     """码值表为空时从 Excel 文件导入（幂等）。返回是否执行了导入。"""
     import pandas as pd
@@ -432,4 +474,5 @@ def init_all_tables():
     init_generation_logs_table()
     init_qa_pairs_columns()
     init_code_values_tables()
+    init_report_tables()
     print("[init] 所有表初始化完成")

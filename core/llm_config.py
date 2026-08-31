@@ -189,3 +189,37 @@ def build_request(messages: list, max_tokens: int = 8000, thinking=None, cfg: di
 
 def mask_key(key: str) -> str:
     return f"sk-****{key[-4:]}" if key and len(key) >= 8 else ('已配置' if key else '')
+
+
+def call_chat(messages: list, max_tokens: int = 8000, thinking=None, cfg: dict = None,
+              effort: str = None, timeout: int = None) -> dict:
+    """基于 build_request() 的最简同步 LLM 调用封装（供报告生成等新模块复用）。
+
+    返回 {'content': str, 'usage': dict}；空响应重试 1 次。
+    timeout 缺省用 config.LLM_TIMEOUT_FAST。
+    """
+    import requests
+
+    cfg = cfg or current()
+    if not cfg.get('api_key'):
+        raise ValueError(f"{cfg.get('provider')} API Key 未配置（请在前端设置页配置）")
+    url, headers, payload = build_request(
+        messages, max_tokens=max_tokens, thinking=thinking, cfg=cfg, effort=effort)
+    timeout = timeout or getattr(config, 'LLM_TIMEOUT_FAST', 120)
+
+    last_err = None
+    for _attempt in range(2):
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            message = data['choices'][0]['message']
+            content = message.get('content') or ''
+            # 推理模型可能把正文放在 content、推理放 reasoning_content；正文为空视为可重试
+            if not content.strip():
+                last_err = ValueError('LLM 返回空内容')
+                continue
+            return {'content': content, 'usage': data.get('usage') or {}}
+        except Exception as e:
+            last_err = e
+    raise last_err if last_err else ValueError('LLM 调用失败')

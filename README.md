@@ -1,6 +1,6 @@
 # 智能问数训练系统 deshu5（轻量化重构版）
 
-基于 deshu4（db/smart-query-trainer）重构。四业务模块相对独立，共享同一 MySQL 底座，
+基于 deshu4（db/smart-query-trainer）重构。六业务模块相对独立，共享同一 MySQL 底座，
 **API 路径与前端零改动**，存量数据（marketing_40 / marketing_governance / marketing_log）直接可用。
 
 ## 架构
@@ -40,16 +40,22 @@ deshu5/
 │   ├── provision/          ④ 素材提资
 │   │   ├── routes.py       上传→预览→执行(SSE)→复核 四步工作流
 │   │   └── provisioner.py  xlsx 模板解析/校验/溯源转换/LLM 标注
-│   └── ontology/           ⑤ 本体模型管理面
-│       └── routes.py       /api/ontology/*（浏览/导出/漂移检测/提案审批）
-├── static/                 前端（含「本体模型」页签：浏览/导出/变更审批横幅）
+│   ├── ontology/           ⑤ 本体模型管理面
+│   │   └── routes.py       /api/ontology/*（浏览/导出/漂移检测/提案审批）
+│   └── report/             ⑥ 深度分析（综合问答/报告生成）
+│       ├── planner.py      意图识别：模板匹配 → LLM 分解标准化问题 → 标准问答对命中标注
+│       ├── executor.py     子问题并发取数（qa_pairs 标准SQL适配复用优先，未命中走 NL2SQL 引擎）
+│       ├── composer.py     取数结果 → Markdown 月报（LLM 成文，失败降级程序拼装）
+│       └── routes.py       /api/report/*（plan/generate(SSE)/templates(问数问题联动qa_pairs)/distill-template/runs/export）
+├── static/                 前端（含「本体模型」页签：浏览/导出/变更审批横幅；「报告生成」页签）
 ├── data/                   运行时数据依赖（DDL 元数据 SQL/码值 Excel）
 └── uploads/                素材提资上传目录
 ```
 
 **依赖方向**（无循环）：
-- `modules/* → core`（连接层、知识底座）
+- `modules/* → core`（连接层、知识底座；core/sql_exec 为共用只读执行器）
 - `training → resources.providers`（生成时读取知识资源）
+- `report → training.engine`（复用 SQLGenerator 类层，不依赖 training.routes）
 - `core/ontology → resources.providers`（提炼概念/同义词，函数级惰性 import）
 - `provision / settings / resources / ontology` 互不依赖
 

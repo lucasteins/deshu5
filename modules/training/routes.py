@@ -328,54 +328,12 @@ def _perform_generate_sql(user_question, no_reference=False, request_mode='qa', 
         }, 500
 
 
-def _safe_execute_sql(sql: str) -> dict:
-    """安全执行 SQL（只读，限制行数）"""
-    if not sql:
-        return {'success': False, 'error': 'SQL为空'}
-
-    sql = _strip_sql_comments(sql)
-
-    # 清理 SQL：只保留第一条有效语句（以第一个分号分割）
-    sql = sql.strip()
-    first_semicolon = sql.find(';')
-    if first_semicolon > 0:
-        after_semicolon = sql[first_semicolon + 1:].strip()
-        if after_semicolon:
-            sql = sql[:first_semicolon + 1]
-
-    # 安全检查
-    sql_upper = sql.strip().upper()
-    allowed_prefixes = config.ALLOWED_SQL_PREFIXES
-    if not any(sql_upper.startswith(p) for p in allowed_prefixes):
-        prefix_list = ' / '.join(allowed_prefixes)
-        return {'success': False, 'error': f'只允许执行 {prefix_list} 语句'}
-
-    for kw in config.FORBIDDEN_KEYWORDS:
-        if kw in sql_upper:
-            return {'success': False, 'error': f'包含禁止的关键词: {kw}'}
-
-    try:
-        with db_manager.connect_business() as conn:
-            sql_for_limit = sql.rstrip(';').strip()
-            limited_sql = _add_limit_if_needed(sql_for_limit)
-            cursor = conn.execute(limited_sql)
-
-            headers = [desc[0] for desc in cursor.description] if cursor.description else []
-            rows = cursor.fetchall()
-
-            rows_serializable = [
-                [str(cell) if cell is not None else None for cell in row]
-                for row in rows
-            ]
-
-            return {
-                'success': True,
-                'headers': headers,
-                'rows': rows_serializable,
-                'row_count': len(rows_serializable)
-            }
-    except Exception as e:
-        return {'success': False, 'error': str(e)}
+# SQL 只读执行器已下沉至 core/sql_exec.py（报告生成等模块共用），此处保持原名引用，行为不变
+from core.sql_exec import (
+    safe_execute_sql as _safe_execute_sql,
+    strip_sql_comments as _strip_sql_comments,
+    add_limit_if_needed as _add_limit_if_needed,
+)
 
 
 def _extract_fields_from_sql(sql: str) -> List[str]:
@@ -396,25 +354,6 @@ def _extract_fields_from_sql(sql: str) -> List[str]:
         for match in re.finditer(r'(?:[\w_]+\.)?([\w_]+)\s*(?:=|!=|<>|>|<|>=|<=|LIKE|IN)', where_match.group(1), re.IGNORECASE):
             fields.add(match.group(1))
     return sorted(fields)
-
-
-def _strip_sql_comments(sql: str) -> str:
-    """去掉 SQL 中的注释行和多行注释"""
-    sql = re.sub(r'/\*.*?\*/', '', sql, flags=re.DOTALL)
-    lines = []
-    for line in sql.split('\n'):
-        stripped = line.strip()
-        if not stripped.startswith('--') and not stripped.startswith('//'):
-            lines.append(line)
-    return '\n'.join(lines)
-
-
-def _add_limit_if_needed(sql: str) -> str:
-    """如果 SQL 没有 LIMIT，自动添加"""
-    sql_stripped = sql.strip()
-    if not re.search(r'\bLIMIT\s+\d+\s*$', sql_stripped, re.IGNORECASE):
-        sql_stripped += f' LIMIT {config.SQL_MAX_ROWS}'
-    return sql_stripped
 
 
 def _record_generation(**kwargs) -> int:

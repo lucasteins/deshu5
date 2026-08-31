@@ -8,6 +8,7 @@
     modules/resources/   ③ 数据资源 + 统计看板
     modules/provision/   ④ 素材提资
     modules/ontology/    ⑤ 本体模型管理面（浏览/导出/漂移检测/变更审批）
+    modules/report/      ⑥ 深度分析（综合问答/报告生成：意图分解 → 标准化问题取数 → 报告拼装）
 
 启动：python app.py（或 start.bat）
 """
@@ -57,6 +58,7 @@ def create_app() -> Flask:
     from modules.resources.routes import bp as resources_bp
     from modules.provision.routes import bp as provision_bp
     from modules.ontology.routes import bp as ontology_bp
+    from modules.report.routes import bp as report_bp
 
     app.register_blueprint(settings_bp)
     app.register_blueprint(workflows_bp)
@@ -64,6 +66,7 @@ def create_app() -> Flask:
     app.register_blueprint(resources_bp)
     app.register_blueprint(provision_bp)
     app.register_blueprint(ontology_bp)
+    app.register_blueprint(report_bp)
 
     # ---- 静态页面与健康检查 ----
     @app.route('/')
@@ -75,7 +78,7 @@ def create_app() -> Flask:
         return jsonify({
             'status': 'ok',
             'version': '5.0.0',
-            'modules': ['settings', 'training', 'resources', 'provision', 'ontology'],
+            'modules': ['settings', 'training', 'resources', 'provision', 'ontology', 'report'],
         })
 
     return app

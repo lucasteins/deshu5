@@ -25,18 +25,39 @@ document.addEventListener('DOMContentLoaded', () => {
 // 切换模式
 function switchMode(mode) {
     document.querySelectorAll('.mode-section').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    
+    document.querySelectorAll('.nav-subitem, .nav-single').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.nav-group').forEach(g => g.classList.remove('active', 'open'));
+
     document.getElementById('mode-' + mode).classList.add('active');
-    document.querySelector(`.nav-item[data-mode="${mode}"]`).classList.add('active');
-    
+    const sub = document.querySelector(`.nav-subitem[data-mode="${mode}"], .nav-single[data-mode="${mode}"]`);
+    if (sub) {
+        sub.classList.add('active');
+        const group = sub.closest('.nav-group');
+        if (group) group.classList.add('active');  // 一级模块保持高亮，标识当前位置
+    }
+
     if (mode === 'stats') loadStats();
     if (mode === 'errors') loadErrorList();
     if (mode === 'qa-lib') loadQALibList();
     if (mode === 'resource') initResourceModule();
     if (mode === 'ontology') initOntologyModule();
     if (mode === 'provision') initProvisionPage();
+    if (mode === 'report') initReportModule();
 }
+
+/** 一级模块点击展开/收起二级菜单（悬停由 CSS :hover 处理，点击兼容触屏与习惯点击的用户） */
+function toggleNavGroup(btn, evt) {
+    if (evt) { evt.preventDefault(); evt.stopPropagation(); }
+    const group = btn.closest('.nav-group');
+    const wasOpen = group.classList.contains('open');
+    document.querySelectorAll('.nav-group.open').forEach(g => g.classList.remove('open'));
+    if (!wasOpen) group.classList.add('open');
+}
+
+// 点击页面其他位置时收起所有导航下拉
+document.addEventListener('click', () => {
+    document.querySelectorAll('.nav-group.open').forEach(g => g.classList.remove('open'));
+});
 
 // ==================== 训练模式 ====================
 
