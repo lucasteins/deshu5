@@ -19,6 +19,7 @@ db/database/*.sql
 db/*.sql
 db/export/
 *.bak.sql
+*.bak
 data/*_bak_*.sql
 
 # 历史归档（清理移入的无用/测试文件，勿上传）
