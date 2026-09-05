@@ -15,9 +15,6 @@ from core.database import DatabaseManager, _ensure_database
 from core import db_profile
 from core.ontology.model import Ontology
 
-_CONTENT_TABLES = ('ontology_classes', 'ontology_properties', 'ontology_relations',
-                   'ontology_enumerations', 'ontology_concepts')
-
 
 class OntologyStore:
     """marketing_ontology 库读写。线程安全交给调用方（service 单例串行化）。"""

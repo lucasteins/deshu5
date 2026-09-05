@@ -1,5 +1,4 @@
 """Schema 加载器：从营销4.0数据库提取表结构、字段、外键、数据分布"""
-import json
 from typing import Dict, List, Any, Optional
 from core.database import DatabaseManager
 
@@ -121,14 +120,7 @@ class SchemaLoader:
         """获取所有表名"""
         schema = self.load_schema()
         return sorted(schema.keys())
-    
-    def get_column_names(self, table: str) -> List[str]:
-        """获取表的字段名列表"""
-        schema = self.load_schema()
-        if table not in schema:
-            return []
-        return [c['name'] for c in schema[table]['columns']]
-    
+
     def get_foreign_keys(self, table: str) -> List[Dict]:
         """获取表的外键列表"""
         schema = self.load_schema()
@@ -185,44 +177,3 @@ class SchemaLoader:
                         related.add(table)
         
         return sorted(related)
-    
-    def get_join_paths(self, from_table: str, to_table: str) -> List[List[Dict]]:
-        """查找两张表之间的JOIN路径（BFS）"""
-        schema = self.load_schema()
-        if from_table not in schema or to_table not in schema:
-            return []
-        
-        from collections import deque
-        queue = deque([(from_table, [])])
-        visited = {from_table}
-        paths = []
-        
-        while queue:
-            current, path = queue.popleft()
-            
-            if current == to_table and path:
-                paths.append(path)
-                continue
-            
-            if current in schema:
-                for fk in schema[current]['foreign_keys']:
-                    next_table = fk['ref_table']
-                    if next_table not in visited:
-                        visited.add(next_table)
-                        new_path = path + [fk]
-                        queue.append((next_table, new_path))
-                
-                for t, info in schema.items():
-                    for fk in info['foreign_keys']:
-                        if fk['ref_table'] == current:
-                            if t not in visited:
-                                visited.add(t)
-                                reverse_fk = {
-                                    'from_col': fk['to_col'],
-                                    'ref_table': t,
-                                    'to_col': fk['from_col']
-                                }
-                                new_path = path + [reverse_fk]
-                                queue.append((t, new_path))
-        
-        return paths

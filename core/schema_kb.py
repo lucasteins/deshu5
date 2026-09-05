@@ -4,7 +4,7 @@ import os
 import json
 import re
 import sys
-from typing import Dict, List, Any, Optional, Set, Tuple
+from typing import Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -70,13 +70,6 @@ class DDLCommentParser:
     
     def get_column_comment(self, table: str, column: str) -> str:
         return self.column_comments.get(table, {}).get(column, '')
-    
-    def get_all_table_comments(self) -> Dict[str, str]:
-        return self.table_comments
-    
-    def get_all_column_comments(self) -> Dict[str, Dict[str, str]]:
-        return self.column_comments
-
 
 class SchemaKnowledgeBase:
     """Schema 知识库：构建、存储、检索"""

@@ -6,7 +6,7 @@ import re
 import time
 import threading
 import requests
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 import config
 from core.schema_loader import SchemaLoader
 from core.rag_retriever import RAGRetriever
@@ -61,95 +61,6 @@ KEYWORD_TO_TABLE_MAP = {
 # 分析型问题关键词（"跳过 LLM 定位"与"草稿直出"两处判定共用；P2 已入库
 # business_rules.analytical_kw，消费点经 get_analytical_keywords() 读取，本常量为空表回退值）
 _DEFAULT_ANALYTICAL_KW = ('分析', '趋势', '分布', '关联', '对比', '占比', '异常', '波动', '画像', '核查', '差异', '情况')
-
-# Schema-driven few-shot 示例（帮助大模型理解 Schema 与 SQL 的映射）
-SCHEMA_FEW_SHOT_EXAMPLES = """
-示例1：统计各供电单位下的高压客户数量
-SELECT m.mgt_org_code, m.mgt_org_name, c.cust_cls_desc, COUNT(DISTINCT c.cust_id) AS cust_count
-FROM dim_cst_elec_cons_cust c
-LEFT JOIN dim_cst_mgt_org m ON c.mgt_org_code = m.mgt_org_code
-WHERE c.cust_cls_desc = '高压'
-GROUP BY m.mgt_org_code, m.mgt_org_name, c.cust_cls_desc
-ORDER BY cust_count DESC;
-
-示例2：统计各供电单位下的计量点数量（按安装点统计）
-SELECT m.mgt_org_code, m.mgt_org_name, COUNT(DISTINCT i.inst_id) AS inst_count
-FROM dim_cst_inst_elec_cons i
-LEFT JOIN dim_cst_mgt_org m ON i.mgt_org_code = m.mgt_org_code
-GROUP BY m.mgt_org_code, m.mgt_org_name
-ORDER BY inst_count DESC;
-
-示例3：查询2026年4月用电量TOP10的计量点
-SELECT e.meter_asset_no, inst.inst_name, SUM(e.pap_e) AS total_pap_e, AVG(e.pap_e) AS avg_pap_e
-FROM dwd_cst_meter_energy_day_h_xz e
-LEFT JOIN dwd_cst_meter_run mrun ON e.meter_asset_no = mrun.meter_asset_no
-LEFT JOIN dim_cst_inst_elec_cons inst ON mrun.inst_id = inst.inst_id
-WHERE strftime('%Y-%m', e.data_date) = '2026-04'
-GROUP BY e.meter_asset_no
-ORDER BY total_pap_e DESC LIMIT 10;
-
-示例4：查询2026年4月用电量排名前10的高压客户
-SELECT c.cust_no, c.cust_name, c.cust_cls_desc, SUM(e.pap_e) AS total_pap_e
-FROM dim_cst_elec_cons_cust c
-JOIN dim_cst_inst_elec_cons inst ON c.cust_id = inst.cust_id
-JOIN dwd_cst_meter_run mrun ON inst.inst_id = mrun.inst_id
-JOIN dwd_cst_meter_energy_day_h_xz e ON mrun.meter_asset_no = e.meter_asset_no
-WHERE c.cust_cls_desc = '高压' AND strftime('%Y-%m', e.data_date) = '2026-04'
-GROUP BY c.cust_no, c.cust_name, c.cust_cls_desc
-ORDER BY total_pap_e DESC LIMIT 10;
-
-示例5：统计某具体供电单位2026年3月的应收电费总额
-SELECT m.mgt_org_code, m.mgt_org_name,
-       SUM(r.rcvbl_amt) AS total_rcvbl,
-       SUM(r.rcvd_amt) AS total_rcvd,
-       SUM(r.arer_bal) AS total_arer
-FROM dwd_cst_rcvbl_acct r
-LEFT JOIN dim_cst_mgt_org m ON r.mgt_org_code = m.mgt_org_code
-WHERE r.rcvbl_ym = '202603' AND m.mgt_org_code = '33401010240'
-GROUP BY m.mgt_org_code, m.mgt_org_name;
-
-示例6：查询设备状态为“拆回待退”的计量点资产编号
-SELECT mrun.meter_asset_no, d.dev_stat_desc
-FROM dwd_cst_meter_run mrun
-LEFT JOIN dim_cst_dev d ON mrun.meter_id = d.dev_id
-WHERE d.dev_stat_desc = '拆回待退';
-
-示例7：统计2026年3月各供电单位的用电量总额（用户级口径只用专变表，不做 UNION ALL）
-SELECT m.mgt_org_code, m.mgt_org_name, SUM(e.pap_e) AS total_pap_e
-FROM dwd_cst_meter_energy_day_h_xz e
-LEFT JOIN dim_cst_mgt_org m ON e.mgt_org_code = m.mgt_org_code
-WHERE DATE_FORMAT(e.data_date, '%Y-%m') = '2026-03'
-GROUP BY m.mgt_org_code, m.mgt_org_name
-ORDER BY total_pap_e DESC;
-
-示例8：查询2026年3月用电量最高的前10位用户（用户级取极值只用专变表；最低则 ORDER BY 改 ASC）
-SELECT c.cust_no, c.cust_name, SUM(e.pap_e) AS total_pap_e
-FROM dim_cst_elec_cons_cust c
-JOIN dwd_cst_meter_run mrun ON c.cust_id = mrun.cust_id
-JOIN dwd_cst_meter_energy_day_h_xz e ON mrun.meter_asset_no = e.meter_asset_no
-WHERE DATE_FORMAT(e.data_date, '%Y-%m') = '2026-03'
-GROUP BY c.cust_no, c.cust_name
-ORDER BY total_pap_e DESC LIMIT 10;
-"""
-
-# Few-shot 示例（纯代码，无中文别名，避免LLM混淆）
-FEW_SHOT_EXAMPLES = [
-    {
-        "question": "查询2026年4月用电量TOP10",
-        "sql": "SELECT meter_asset_no, SUM(pap_e) AS total_pap_e FROM dwd_cst_es_meter_energy_day_p WHERE DATE_FORMAT(data_date, '%Y-%m') = '2026-04' GROUP BY meter_asset_no ORDER BY total_pap_e DESC LIMIT 10;",
-        "pattern": "TOP N 排序"
-    },
-    {
-        "question": "查询所有高压客户的编号和电压等级",
-        "sql": "SELECT cust_no, cust_volt_desc, ec_categ_desc FROM dim_cst_elec_cons_cust WHERE cust_cls_desc = '高压';",
-        "pattern": "单表过滤"
-    },
-    {
-        "question": "查询某管理单位下所有高压客户的总用电量",
-        "sql": "SELECT c.cust_no, c.cust_name, SUM(e.pap_e) AS total_pap_e FROM dim_cst_elec_cons_cust c JOIN dwd_cst_meter_run m ON c.cust_no = m.cust_no JOIN dwd_cst_es_meter_energy_day_p e ON m.meter_asset_no = e.meter_asset_no WHERE c.mgt_org_no = '330101' AND c.cust_cls_desc = '高压' GROUP BY c.cust_no, c.cust_name;",
-        "pattern": "多表JOIN聚合"
-    }
-]
 
 # Schema-driven 语义映射速查（帮助大模型把业务术语映射到真实字段）
 SEMANTIC_FIELD_HINTS = """
@@ -294,6 +205,21 @@ class SQLGenerator:
                 print(f'[WARN] 本体码值翻译表失败，回退 RAG: {e}', flush=True)
         return self.rag_retriever.get_code_value_translations()
 
+    @staticmethod
+    def _clean_aliases(sql: str) -> str:
+        """别名纪律（确定性后处理）：核心词组、≤8 个汉字、禁标点。
+        LLM 常把列注释整段搬进别名（'AS 地区名称（全国/省/城市）'、'AS 行政区划代码（GB/T 2260）'，
+        全角括号/空格/斜杠在 MySQL 裸标识符中非法或截断残留 → 1064）。
+        两步：① AS 核心词（全角注释段） → 只留核心词；② 含中文且 >8 字的别名截到 8 字。"""
+        if not sql:
+            return sql
+        sql = re.sub(r'(?i)\bAS\s+([^\s,（）()]+)\s*（[^）]*）', r'AS \1', sql)
+        sql = re.sub(r'(?i)\bAS\s+([^\s,（）()]+)',
+                     lambda m: 'AS ' + m.group(1)[:8]
+                     if (len(m.group(1)) > 8 and re.search(r'[一-鿿]', m.group(1))) else m.group(0),
+                     sql)
+        return sql
+
     def generate(
         self,
         user_question: str,
@@ -315,6 +241,8 @@ class SQLGenerator:
             thinking_cb=thinking_cb
         )
         if isinstance(result, dict):
+            if result.get('sql'):
+                result['sql'] = self._clean_aliases(result['sql'])  # 别名纪律最终收口
             result['usage'] = self._snapshot_usage()
             result.setdefault('workflow', self._wf.get('_name', 'custom'))  # P3：报告追溯用
         return result
@@ -485,9 +413,6 @@ class SQLGenerator:
         """v3.0 意图驱动生成：意图解析 + 多路 RAG + LLM 生成"""
         t_start = time.perf_counter()
         timers = {}
-
-        def _tick(label: str):
-            timers[label] = (time.perf_counter() - t_start) * 1000
 
         def _emit(stage, ms):
             if progress_cb:
@@ -905,74 +830,6 @@ class SQLGenerator:
             'tables_involved': intent.get('tables', []),
             'timers': timers
         }
-    
-    def _build_schema_context_from_docs(self, schema_docs: Dict) -> str:
-        """从 Schema 文档构建上下文文本"""
-        lines = []
-        
-        # 核心主链（如果相关表中包含链路表，则提示）
-        main_chain = [
-            'dim_cst_cust',
-            'dim_cst_elec_cons_cust',
-            'dim_cst_inst_elec_cons',
-            'dwd_cst_meter_run',
-            'dwd_cst_meter_energy_day_h_xz'
-        ]
-        chain_tables = [t for t in main_chain if t in [x['table_name'] for x in schema_docs.get('tables', [])]]
-        if len(chain_tables) >= 2:
-            lines.append("【核心关联链路】")
-            lines.append("客户(dim_cst_cust) → 用电客户(dim_cst_elec_cons_cust) → 安装点(dim_cst_inst_elec_cons) → 计量点运行(dwd_cst_meter_run) → 日电量(dwd_cst_meter_energy_day_h_xz)")
-            lines.append("JOIN 条件：")
-            lines.append("  dim_cst_cust.cust_id = dim_cst_elec_cons_cust.cust_id")
-            lines.append("  dim_cst_elec_cons_cust.cust_id = dim_cst_inst_elec_cons.cust_id")
-            lines.append("  dim_cst_inst_elec_cons.inst_id = dwd_cst_meter_run.inst_id")
-            lines.append("  dwd_cst_meter_run.meter_asset_no = dwd_cst_meter_energy_day_h_xz.meter_asset_no")
-            lines.append("")
-        
-        lines.append("【可用表】")
-        for t in schema_docs.get('tables', []):
-            lines.append(f"- {t['table_name']}：{t['table_comment']}（{t.get('row_count', 0)}行）")
-        
-        lines.append("\n【关键字段】")
-        shown = 0
-        for c in schema_docs.get('columns', []):
-            comment = c.get('column_comment', '')
-            # 优先显示有注释的字段
-            if comment and shown < 12:
-                lines.append(f"- {c['table_name']}.{c['column_name']}：{comment}")
-                shown += 1
-        
-        lines.append("\n【推荐关联路径】")
-        for r in schema_docs.get('relationships', [])[:5]:
-            lines.append(f"- {r['title']}")
-            for jc in r['join_conditions']:
-                lines.append(f"  {jc}")
-        
-        return '\n'.join(lines)
-    
-    def _build_schema_rich_context(self, tables: List[str]) -> str:
-        """基于 SchemaLoader 构建详细的表结构上下文（含字段注释）"""
-        schema = self.schema_loader.load_schema()
-        lines = []
-        for table in tables:
-            if table not in schema:
-                continue
-            info = schema[table]
-            comment = self.schema_loader._load_field_comments(table)
-            lines.append(f"\n表：{table}")
-            for col in info['columns']:
-                col_comment = col.get('comment', '')
-                pk_flag = ' PK' if col.get('pk', 0) > 0 else ''
-                lines.append(f"  - {col['name']} ({col['type']}){pk_flag}: {col_comment}")
-        return '\n'.join(lines)
-    
-    def _get_global_schema_context(self) -> str:
-        """获取启动时预加载的全局 Schema 上下文。"""
-        try:
-            from core.schema_preloader import SchemaPreloader
-            return SchemaPreloader.get_instance().get_global_context()
-        except Exception:
-            return ''
 
     def _build_pattern_context(self, user_question: str, located_tables: List[str] = None) -> str:
         """从统一知识检索层构建 SQL 模式上下文。
@@ -1489,9 +1346,13 @@ class SQLGenerator:
 
     def _translate_code_value_literals(self, sql: str) -> str:
         """把存编码列上的中文描述条件值机械翻译成编码（LLM 不守形态规则时的确定性兜底）。
-        只替换该列条件表达式中的引号字面量，避免误伤其他位置。"""
+        只替换该列条件表达式中的引号字面量，避免误伤其他位置。开头先过别名纪律清理。
+        附带：名称列的唯一前缀补全（LLM 写 report_name='全社会用电量'，
+        实际值为'全社会用电量（亿千瓦时）'——唯一前缀时确定性补全，否则不动）。"""
         if not sql:
             return sql
+        sql = self._clean_aliases(sql)  # 别名纪律（核心词组、≤8 字、禁标点）
+        sql = self._complete_name_literals(sql)
         try:
             mappings = self._code_value_translations()
         except Exception as e:
@@ -1518,6 +1379,34 @@ class SQLGenerator:
             sql = re.sub(
                 r"((?:\w+\.)?" + re.escape(column) + r"\s+IN\s*\()([^)]*)(\))",
                 _fix_in, sql, flags=re.IGNORECASE)
+        return sql
+
+    def _complete_name_literals(self, sql: str) -> str:
+        """名称形态码值列的唯一前缀补全（确定性）：
+        col = 'X' 且 X 不是值域成员、但值域中恰有唯一成员以 X 开头 → 补全为该成员。
+        依据 code_value_column_form 的 (table, column, code_name, form='名称') 登记。"""
+        try:
+            self.rag_retriever._load_code_value_index()
+            items_map = self.rag_retriever._cv_items
+            with self.db.connect_governance() as conn:
+                rows = conn.execute("SELECT table_name, column_name, code_name "
+                                    "FROM code_value_column_form WHERE form='名称'").fetchall()
+        except Exception:
+            return sql
+        for table, column, code_name in rows:
+            if table not in sql:
+                continue
+            names = [name for _c, name in items_map.get(code_name, []) if name]
+            if not names:
+                continue
+            for m in re.finditer(
+                    r"((?:\w+\.)?" + re.escape(column) + r"\s*=\s*)'([^']+)'", sql, re.IGNORECASE):
+                val = m.group(2)
+                if val in names:
+                    continue
+                cands = [n for n in names if n.startswith(val)]
+                if len(cands) == 1:
+                    sql = sql.replace(m.group(0), m.group(1) + f"'{cands[0]}'")
         return sql
 
     def _build_code_value_context(self, user_question: str, tables: List[str]) -> str:
@@ -1842,15 +1731,7 @@ LIMIT：{intent.get('limit', '无')}"""
             patterns.append(f"{short_field} LIKE '{value}'")
         
         return '，'.join(patterns[:5]) if patterns else ''
-    
-    def _build_few_shot_context(self) -> str:
-        lines = []
-        for ex in FEW_SHOT_EXAMPLES:
-            lines.append(f"问题: {ex['question']}")
-            lines.append(f"SQL: {ex['sql']}")
-            lines.append("")
-        return "\n".join(lines)
-    
+
     def _build_prompt(
         self,
         user_question: str,
@@ -2314,7 +2195,8 @@ LIMIT：{intent.get('limit', '无')}"""
 - 不通过：{{"pass": false, "reason": "问题简述", "sql": "修正后的完整可执行 SQL"}}
 推理从简，直接给结论。"""
         try:
-            result = self._call_llm(prompt, user_question=user_question, max_tokens=6000, thinking=True,
+            result = self._call_llm(prompt, user_question=user_question, max_tokens=6000,
+                                    thinking=getattr(config, 'GEN_AUDIT_THINKING', False),
                                     effort=getattr(config, 'GEN_AUDIT_EFFORT', 'low'))
             content = result.get('content', '')
             m = re.search(r'\{.*\}', content, re.S)
@@ -2455,45 +2337,6 @@ LIMIT：{intent.get('limit', '无')}"""
         except Exception:
             return False
 
-    def _extract_field_patterns(self, sql: str) -> str:
-        """提取SQL中关键字段的使用模式"""
-        patterns = []
-        
-        # SELECT字段
-        select_match = re.search(r'SELECT\s+(.+?)\s+FROM', sql, re.IGNORECASE | re.DOTALL)
-        if select_match:
-            select_fields = select_match.group(1).strip()
-            # 提取聚合字段和维度字段
-            fields = []
-            for f in re.findall(r'(\w+)\.(\w+)|(\w+)\(', select_fields, re.IGNORECASE):
-                if f[1]:
-                    fields.append(f[1])
-                elif f[2]:
-                    fields.append(f[2] + '()')
-            if fields:
-                patterns.append(f"输出字段: {', '.join(set(fields[:5]))}")
-        
-        # JOIN条件中的字段
-        join_matches = re.findall(r'JOIN\s+\w+\s+\w+\s+ON\s+(.+?)(?:JOIN|WHERE|GROUP|ORDER|LIMIT|$)', sql, re.IGNORECASE | re.DOTALL)
-        if join_matches:
-            join_fields = []
-            for jm in join_matches:
-                for match in re.findall(r'(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)', jm):
-                    join_fields.append(f"{match[1]}={match[3]}")
-            if join_fields:
-                patterns.append(f"关联字段: {', '.join(set(join_fields[:3]))}")
-        
-        # WHERE中的字段
-        where_match = re.search(r'WHERE\s+(.+?)(?:GROUP|ORDER|LIMIT|$)', sql, re.IGNORECASE | re.DOTALL)
-        if where_match:
-            where_fields = []
-            for match in re.findall(r'(\w+)\.(\w+)\s*(=|LIKE|IN|>=|<=|>|<)', where_match.group(1), re.IGNORECASE):
-                where_fields.append(match[1])
-            if where_fields:
-                patterns.append(f"过滤字段: {', '.join(set(where_fields[:3]))}")
-        
-        return '；'.join(patterns) if patterns else ''
-    
     def _extract_aggregation_pattern(self, sql: str) -> str:
         """提取SQL中的聚合模式（如 SUM/COUNT/AVG + GROUP BY）"""
         patterns = []

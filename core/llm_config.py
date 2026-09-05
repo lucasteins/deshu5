@@ -187,10 +187,6 @@ def build_request(messages: list, max_tokens: int = 8000, thinking=None, cfg: di
     return url, headers, payload
 
 
-def mask_key(key: str) -> str:
-    return f"sk-****{key[-4:]}" if key and len(key) >= 8 else ('已配置' if key else '')
-
-
 def call_chat(messages: list, max_tokens: int = 8000, thinking=None, cfg: dict = None,
               effort: str = None, timeout: int = None) -> dict:
     """基于 build_request() 的最简同步 LLM 调用封装（供报告生成等新模块复用）。

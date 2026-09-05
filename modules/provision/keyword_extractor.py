@@ -104,18 +104,6 @@ def _en_tokens(text: str) -> set:
     return out
 
 
-def _all_tokens(text: str, keep_full_identifier: bool = False, identifier: str = None) -> set:
-    """合并中英文分词。keep_full_identifier 时把整体列名也作为一个关键词
-    （仅当多段或长度≥4 且非噪声词，避免 id/name 这类进入）。"""
-    toks = _cn_tokens(text) | _en_tokens(text)
-    if keep_full_identifier and identifier:
-        ident = re.sub(r'[^a-zA-Z0-9_]', '', str(identifier)).lower()
-        if ident and ident not in _LAYER_PREFIXES and ident not in _NOISE_EN:
-            if '_' in ident or len(ident) >= 4:
-                toks.add(ident)
-    return toks
-
-
 # ==================== 数据读取 ====================
 
 def _read_schema_docs(db: DatabaseManager):

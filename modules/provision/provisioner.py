@@ -969,7 +969,7 @@ def annotate_llm(run_id: str, llm_tasks: list, progress_cb=None, db=None) -> dic
         result['degraded'] += 1
 
     try:
-        cfg = __import__('engine.llm_config', fromlist=['current']).current()
+        cfg = __import__('core.llm_config', fromlist=['current']).current()
         model = cfg.get('model', '')
     except Exception:
         model = ''

@@ -37,7 +37,6 @@ KIMI_API_KEY = os.environ.get('KIMI_API_KEY', '')
 KIMI_MODEL = os.environ.get('KIMI_MODEL', 'kimi-for-coding-highspeed')
 KIMI_THINKING = os.environ.get('KIMI_THINKING', 'true').lower() in ('true', '1', 'yes')
 KIMI_THINKING_BUDGET = int(os.environ.get('KIMI_THINKING_BUDGET', '6144'))
-KIMI_TEMPERATURE = float(os.environ.get('KIMI_TEMPERATURE', '0.6'))
 
 if not KIMI_API_KEY:
     import warnings
@@ -65,7 +64,6 @@ USE_INTENT_GENERATION = os.environ.get('USE_INTENT_GENERATION', 'true').lower() 
 # ==================== SQL 生成 ====================
 MAX_SQL_RETRIES = 2
 RAG_TOP_K = 5
-SQL_TIMEOUT = 10
 SQL_MAX_ROWS = 50
 
 # Prompt 预算与分段配额（字符数，Track B 收敛定型值）

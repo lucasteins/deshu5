@@ -329,11 +329,7 @@ def _perform_generate_sql(user_question, no_reference=False, request_mode='qa', 
 
 
 # SQL 只读执行器已下沉至 core/sql_exec.py（报告生成等模块共用），此处保持原名引用，行为不变
-from core.sql_exec import (
-    safe_execute_sql as _safe_execute_sql,
-    strip_sql_comments as _strip_sql_comments,
-    add_limit_if_needed as _add_limit_if_needed,
-)
+from core.sql_exec import safe_execute_sql as _safe_execute_sql
 
 
 def _extract_fields_from_sql(sql: str) -> List[str]:
@@ -717,32 +713,6 @@ def submit_judgment():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-
-def _create_error_record(session: dict, feedback: str = '') -> int:
-    """创建错题记录"""
-    with db_manager.connect_governance() as conn:
-        cursor = conn.execute('''
-            INSERT INTO error_records (
-                business_question, generated_sql, correct_sql,
-                error_type, error_detail, sql_pattern,
-                tables_involved, fields_involved,
-                is_resolved, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            session.get('question', ''),
-            session.get('sql', ''),
-            session.get('standard_sql', ''),
-            '待分类',
-            feedback or '用户在训练模式中标记为错误',
-            '',
-            json.dumps(session.get('tables_involved', []), ensure_ascii=False),
-            '',
-            0,
-            datetime.now().isoformat()
-        ))
-        conn.commit()
-        return cursor.lastrowid
 
 
 @bp.route('/api/save-qa', methods=['POST'])

@@ -1,7 +1,6 @@
 """SQL 审查器：检查生成的 SQL 是否存在错题集中的典型错误"""
 import re
-import json
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from core.database import DatabaseManager
 
 

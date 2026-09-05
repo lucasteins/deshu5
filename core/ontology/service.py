@@ -296,14 +296,6 @@ class OntologyService:
         e = ont.entities.get(name) if ont else None
         return e.to_dict() if e else None
 
-    def resolve_tables(self, entity_name: str) -> List[str]:
-        """实体 → 成员物理表（仅返回当前本体中实际存在的表）。"""
-        ont = self._ensure_loaded()
-        e = ont.entities.get(entity_name) if ont else None
-        if not e:
-            return []
-        return [t for t in e.member_tables if t in ont.classes]
-
     def table_to_entity(self) -> Dict[str, str]:
         """物理表 → 实体名 反查索引。"""
         ont = self._ensure_loaded()

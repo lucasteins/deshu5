@@ -33,12 +33,6 @@ from modules.resources.base import ResourceProvider, rows_to_dicts, row_to_dict,
 from modules.resources.providers.sql_template import (
     _ensure_table as _ensure_knowledge_table, RULE_WHERE)
 
-RULE_TYPES = ('elec_caliber', 'org_caliber', 'semantic_hint',
-              'family_synonym', 'draft_guard', 'analytical_kw')
-
-# 词表类单例规则的 name 标识（family_synonym 为多行，差异词取 JSON 首元素，不在此列）
-_SINGLETON_RULE_NAMES = ('semantic_hint', 'draft_guard', 'analytical_kw')
-
 
 def _is_caliber_type(rule_type: str) -> bool:
     """口径类规则判定：name（原 rule_type）以 _caliber 结尾即视为口径注入规则

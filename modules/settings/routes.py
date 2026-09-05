@@ -7,7 +7,6 @@ from flask import Blueprint, jsonify, request
 
 import config
 from core import llm_config
-from core.database import DatabaseManager
 
 bp = Blueprint('settings', __name__, url_prefix='/api/settings')
 workflows_bp = Blueprint('settings_workflows', __name__)  # /api/workflows（无前缀，供设置页切换生成工作流）

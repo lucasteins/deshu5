@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """结构化 SQL 生成器：基于 SQLIntent 和 RAG 上下文构建 SQL"""
 import re
-import json
 import os
 import sys
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, List, Optional, Set
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

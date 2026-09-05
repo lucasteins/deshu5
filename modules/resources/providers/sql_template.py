@@ -242,12 +242,3 @@ def get_enabled_template_names():
     if not rows:
         return None
     return {r['name'] for r in rows if r.get('enabled')}
-
-
-def get_signature_templates() -> list:
-    """已废弃（2026-08-19：match_signature/slot_spec 列删除，签名/槽位改由
-    engine/knowledge_retriever 与 TemplateMatcher 运行时推导，生成链路不再经此读取）。
-    保留空实现仅为兼容历史调用方；表缺列/异常/无命中返回 []。"""
-    return [{'id': r['id'], 'name': r['name'], 'skeleton': r.get('sql_rule') or '',
-             'slot_spec': {}, 'signature': {}}
-            for r in _get_rows() if r.get('enabled') and r.get('sql_rule')]

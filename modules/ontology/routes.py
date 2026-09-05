@@ -8,7 +8,7 @@
 """
 from flask import Blueprint, jsonify, Response
 
-from core.ontology.export import FORMATS, export_ontology
+from core.ontology.export import export_ontology
 from core.ontology.service import OntologyService
 
 bp = Blueprint('ontology', __name__, url_prefix='/api/ontology')

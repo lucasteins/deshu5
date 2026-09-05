@@ -8,7 +8,6 @@ P1（模板库重做）：新增签名匹配主通道——从 sql_knowledge 模
 knowledge_retriever 加载时推导（example_qa_ids 例题分词），槽位由本类 _fill_skeleton
 按占位符约定 + 骨架上下文/列采样推导。
 """
-import json
 import re
 from typing import Dict, List, Optional
 
