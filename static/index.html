@@ -3,45 +3,57 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
 <title>智能问数训练系统</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<div class="container">
-    <!-- 导航栏 -->
-    <nav class="nav-bar">
-        <div class="nav-brand">智能问数训练系统</div>
-        <div class="nav-tabs">
-            <div class="nav-group active">
-                <button type="button" class="nav-item nav-group-label" onclick="toggleNavGroup(this, event)">问数训练</button>
-                <div class="nav-dropdown">
-                    <a href="#" class="nav-subitem active" data-mode="training" onclick="switchMode('training')">训练模式</a>
-                    <a href="#" class="nav-subitem" data-mode="qa" onclick="switchMode('qa')">智能问答</a>
-                </div>
-            </div>
-            <div class="nav-group">
-                <button type="button" class="nav-item nav-group-label" onclick="toggleNavGroup(this, event)">知识库</button>
-                <div class="nav-dropdown">
-                    <a href="#" class="nav-subitem" data-mode="qa-lib" onclick="switchMode('qa-lib')">问答对库</a>
-                    <a href="#" class="nav-subitem" data-mode="errors" onclick="switchMode('errors')">错题集</a>
-                </div>
-            </div>
-            <div class="nav-group">
-                <button type="button" class="nav-item nav-group-label" onclick="toggleNavGroup(this, event)">数据治理</button>
-                <div class="nav-dropdown">
-                    <a href="#" class="nav-subitem" data-mode="resource" onclick="switchMode('resource')">数据资源</a>
-                    <a href="#" class="nav-subitem" data-mode="provision" onclick="switchMode('provision')">素材提资</a>
-                    <a href="#" class="nav-subitem" data-mode="ontology" onclick="switchMode('ontology')">本体模型</a>
-                    <a href="#" class="nav-subitem" data-mode="stats" onclick="switchMode('stats')">统计看板</a>
-                </div>
-            </div>
-            <a href="#" class="nav-item nav-single" data-mode="report" onclick="switchMode('report')">深度分析</a>
+<div class="app-shell">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <div class="sb-brand">
+            <span class="sb-logo" aria-hidden="true"></span>
+            <span class="sb-brand-text">智能问数<span class="sb-brand-sub">NL2SQL · DATA CONSOLE</span></span>
         </div>
-        <button class="settings-btn" id="settings-btn" onclick="openSettings()" title="设置">⚙ 设置</button>
-    </nav>
+        <nav class="sb-nav">
+            <div class="nav-group">
+                <div class="sb-group-label">问数训练</div>
+                <a href="#" class="nav-subitem active" data-mode="training" onclick="switchMode('training')">训练模式</a>
+                <a href="#" class="nav-subitem" data-mode="qa" onclick="switchMode('qa')">智能问答</a>
+            </div>
+            <div class="nav-group">
+                <div class="sb-group-label">知识库</div>
+                <a href="#" class="nav-subitem" data-mode="qa-lib" onclick="switchMode('qa-lib')">问答对库</a>
+                <a href="#" class="nav-subitem" data-mode="errors" onclick="switchMode('errors')">错题集</a>
+            </div>
+            <div class="nav-group">
+                <div class="sb-group-label">数据治理</div>
+                <a href="#" class="nav-subitem" data-mode="resource" onclick="switchMode('resource')">数据资源</a>
+                <a href="#" class="nav-subitem" data-mode="provision" onclick="switchMode('provision')">素材提资</a>
+                <a href="#" class="nav-subitem" data-mode="ontology" onclick="switchMode('ontology')">本体模型</a>
+                <a href="#" class="nav-subitem" data-mode="stats" onclick="switchMode('stats')">统计看板</a>
+            </div>
+            <div class="nav-group">
+                <div class="sb-group-label">分析</div>
+                <a href="#" class="nav-subitem nav-single" data-mode="report" onclick="switchMode('report')">深度分析</a>
+            </div>
+        </nav>
+        <div class="sb-footer">
+            <a href="#" class="sb-settings" onclick="openSettings();return false;">⚙ 设置</a>
+        </div>
+    </aside>
+
+    <!-- 主区 -->
+    <div class="main-col">
+        <header class="page-header">
+            <div class="page-kicker">智能问数训练系统 · NL2SQL STUDIO</div>
+            <h1 class="page-title" id="page-title">训练模式</h1>
+            <div class="page-sub" id="page-subtitle">出题 · 合理性评价 · SQL 生成 · 结果判断</div>
+        </header>
+        <div class="page-body">
 
     <!-- 训练模式 -->
     <section id="mode-training" class="mode-section active">
@@ -138,7 +150,7 @@
                 <div class="sql-section" id="training-sql-section" style="display:none;">
                     <h3>生成的 SQL <button class="btn-toggle-sql" id="btn-toggle-training-sql" onclick="toggleTrainingSQL()" style="display:none;font-size:12px;padding:2px 8px;margin-left:10px;">查看原始SQL</button></h3>
                     <pre class="sql-code" id="generated-sql">-- 等待生成...</pre>
-                    <pre class="sql-code raw-sql" id="generated-sql-raw" style="display:none;color:#666;font-size:0.9em;"></pre>
+                    <pre class="sql-code raw-sql" id="generated-sql-raw" style="display:none;color:var(--faint);font-size:0.9em;"></pre>
                 </div>
 
                 <div class="result-section" id="training-result-section" style="display:none;">
@@ -244,7 +256,7 @@
                         <span class="cp-mode-badge" id="qa-gen-mode" style="display:none"></span>
                     </h3>
                     <pre class="sql-code" id="qa-generated-sql"></pre>
-                    <pre class="sql-code raw-sql" id="qa-generated-sql-raw" style="display:none;color:#666;font-size:0.9em;"></pre>
+                    <pre class="sql-code raw-sql" id="qa-generated-sql-raw" style="display:none;color:var(--faint);font-size:0.9em;"></pre>
                     <div class="review-status" id="review-status"></div>
                     <div class="qa-actions" id="qa-actions" style="display:none">
                         <button class="btn btn-correct btn-sm" onclick="saveQA()">保存为问答对</button>
@@ -555,7 +567,6 @@
             <div class="drawer-body" id="drawer-body"></div>
         </aside>
     </section>
-</div>
 
 <!-- 资源管理通用编辑弹窗（P2，表单按 entry_schema 动态生成） -->
 <div class="modal" id="res-admin-modal" style="display:none">
@@ -707,7 +718,7 @@
                     <select class="form-select" id="db-profile-select" style="flex:1;"></select>
                     <button class="btn btn-secondary btn-sm" onclick="switchDbProfile()" id="db-profile-btn">切换</button>
                 </div>
-                <div style="font-size:12px;color:#666;margin-top:4px;" id="db-profile-note"></div>
+                <div style="font-size:12px;color:var(--muted);margin-top:4px;" id="db-profile-note"></div>
             </div>
             <div class="form-group">
                 <label>MySQL 主机</label>
@@ -728,8 +739,8 @@
                 <button class="btn btn-secondary btn-sm" onclick="testDbConnection()" id="db-test-btn">测试数据库连接</button>
                 <span class="settings-test-result" id="db-test-result" style="margin-left:8px;"></span>
             </div>
-            <div id="db-databases-status" style="font-size:12px;color:#666;margin-bottom:4px;"></div>
-            <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0;">
+            <div id="db-databases-status" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div>
+            <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
             <div class="settings-status" id="settings-status">当前生效：-</div>
             <div class="form-group">
                 <label>服务商</label>
@@ -754,7 +765,7 @@
                 <label>Temperature（可选，留空用服务端默认；Kimi 由端点强制忽略此项）</label>
                 <input type="text" class="form-input" id="settings-temperature" placeholder="如 0.2">
             </div>
-            <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0;">
+            <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
             <div class="form-group">
                 <label>SQL 生成工作流预设（切换即时生效，无需重启）</label>
                 <select class="form-select" id="settings-workflow" onchange="onWorkflowChange()">
@@ -841,7 +852,7 @@
         <div class="stats-card">
             <!-- 变更审批横幅：检测到底座结构漂移且有 pending 提案时显示 -->
             <div id="onto-drift-banner" style="display:none; padding:10px 14px; margin-bottom:12px;
-                 border:1px solid #d48806; border-radius:8px; background:#fffbe6;">
+                 border:1px solid var(--warn); border-radius:8px; background:rgba(255,180,67,.08);">
                 <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                     <strong>⚠ 基础表结构已变化</strong>
                     <span class="hint" id="onto-drift-text" style="margin:0"></span>
@@ -1088,6 +1099,9 @@
             </div>
         </main>
     </section>
+        </div><!-- /page-body -->
+    </div><!-- /main-col -->
+</div><!-- /app-shell -->
 
 <script src="js/app.js"></script>
 <script src="js/resource.js"></script>

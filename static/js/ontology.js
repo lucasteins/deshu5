@@ -474,7 +474,7 @@ async function loadOntoProposals() {
 
 // ==================== 实体图谱（力导向图，二级页签） ====================
 
-const ONTO_LAYER_COLORS = { master: '#2F80ED', business: '#EB5757', report: '#27AE60' };
+const ONTO_LAYER_COLORS = { master: '#5aa2ff', business: '#ff7a72', report: '#4ecb8d' };
 let OG = null;   // 图谱状态
 
 async function ontoGraphInit() {
@@ -604,7 +604,7 @@ function ontoGraphDraw() {
         if (!a || !b || !ogVisible(e.from_entity) || !ogVisible(e.to_entity)) return;
         const p1 = ogW2S(a.x, a.y), p2 = ogW2S(b.x, b.y);
         const active = !OG.sel || (neighborSet.has(e.from_entity) && neighborSet.has(e.to_entity));
-        ctx.strokeStyle = active ? 'rgba(120,110,90,0.5)' : 'rgba(120,110,90,0.08)';
+        ctx.strokeStyle = active ? 'rgba(155,144,134,0.5)' : 'rgba(155,144,134,0.1)';
         ctx.lineWidth = Math.min(3, 0.7 + e.member_relations.length * 0.4) * OG.scale;
         ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
     });
@@ -617,10 +617,10 @@ function ontoGraphDraw() {
         ctx.globalAlpha = dim ? 0.25 : 1;
         ctx.beginPath();
         ctx.arc(p[0], p[1], n.r * OG.scale, 0, Math.PI * 2);
-        ctx.fillStyle = ONTO_LAYER_COLORS[n.layer] || '#A8A294';
+        ctx.fillStyle = ONTO_LAYER_COLORS[n.layer] || '#9b9086';
         ctx.fill();
         if (name === OG.sel || name === OG.hoverNode) {
-            ctx.lineWidth = 2.5; ctx.strokeStyle = '#1F2933'; ctx.stroke();
+            ctx.lineWidth = 2.5; ctx.strokeStyle = '#ff7a1a'; ctx.stroke();
         }
         if (n.pinned) {
             // 钉住标记：中心小圆点（双击可取消固定）
@@ -631,7 +631,7 @@ function ontoGraphDraw() {
         }
         ctx.globalAlpha = 1;
         ctx.font = Math.max(10, 12 * OG.scale) + 'px sans-serif';
-        ctx.fillStyle = '#3B3325';
+        ctx.fillStyle = '#f2ece4';
         ctx.textAlign = 'center';
         ctx.fillText(n.label || name, p[0], p[1] + n.r * OG.scale + 14 * OG.scale);
     });
@@ -679,7 +679,7 @@ function ontoGraphBindEvents() {
             if (name) {
                 const n = OG.nm[name];
                 tip.innerHTML = '<b>' + _ontoEsc(n.label || name) + '</b> ' +
-                    '<span style="color:#888">' + _ontoEsc(name) + '</span><br>' +
+                    '<span style="color:#9b9086">' + _ontoEsc(name) + '</span><br>' +
                     (ONTO_LAYER_BADGE[n.layer] || n.layer) + ' · ' + n.member_count + ' 成员表 · ' +
                     (OG.adj[name] || []).length + ' 实体关系' + (n.pinned ? ' · 已固定' : '') + '<br>' +
                     '<span class="hint">点击查看明细 · 拖拽固定 · 双击取消固定 · 右键隐藏</span>';

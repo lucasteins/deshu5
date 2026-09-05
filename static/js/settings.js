@@ -50,10 +50,10 @@ async function loadDbSettings() {
         document.getElementById('db-databases-status').textContent = parts.join('　|　');
         const allOk = (data.databases || []).every(d => d.connected);
         status.textContent = `数据库（MySQL）：${data.current_label} ${allOk ? '连接正常' : '存在连接异常'} @ ${data.host}:${data.port}`;
-        status.style.color = allOk ? '#2e7d32' : '#c62828';
+        status.style.color = allOk ? '#3fc98d' : '#ff6a5a';
     } catch (e) {
         status.textContent = '数据库配置加载失败: ' + e.message;
-        status.style.color = '#c62828';
+        status.style.color = '#ff6a5a';
     }
 }
 
@@ -76,17 +76,17 @@ async function switchDbProfile() {
         if (!data.success) throw new Error(data.error || '切换失败');
         sel.value = data.current_profile;
         note.innerHTML = `已切换到 <b>${data.current_label}</b>（缓存已重载）`;
-        note.style.color = '#2e7d32';
+        note.style.color = '#3fc98d';
         // 刷新三库状态展示
         const parts = (data.databases || []).map(d =>
             `${d.name}: ${d.connected ? '✓' : '✗ ' + (d.error || '')}`);
         document.getElementById('db-databases-status').textContent = parts.join('　|　');
         document.getElementById('db-settings-status').textContent =
             `数据库（MySQL）：${data.current_label} 已生效`;
-        document.getElementById('db-settings-status').style.color = '#2e7d32';
+        document.getElementById('db-settings-status').style.color = '#3fc98d';
     } catch (e) {
         note.innerHTML = '切换失败: ' + e.message;
-        note.style.color = '#c62828';
+        note.style.color = '#ff6a5a';
     } finally {
         btn.disabled = false;
     }
@@ -98,7 +98,7 @@ async function testDbConnection() {
     const result = document.getElementById('db-test-result');
     btn.disabled = true;
     result.textContent = '测试中…';
-    result.style.color = '#666';
+    result.style.color = '#9b9086';
     try {
         const resp = await fetch('/api/settings/db/test', {
             method: 'POST',
@@ -113,14 +113,14 @@ async function testDbConnection() {
         const data = await resp.json();
         if (data.ok) {
             result.textContent = `✓ 连接成功（${data.elapsed_ms}ms）MySQL ${data.server_version}`;
-            result.style.color = '#2e7d32';
+            result.style.color = '#3fc98d';
         } else {
             result.textContent = '✗ 连接失败: ' + (data.error || '未知错误');
-            result.style.color = '#c62828';
+            result.style.color = '#ff6a5a';
         }
     } catch (e) {
         result.textContent = '✗ 请求失败: ' + e.message;
-        result.style.color = '#c62828';
+        result.style.color = '#ff6a5a';
     } finally {
         btn.disabled = false;
     }
@@ -138,10 +138,10 @@ async function loadWorkflowPresets() {
             `<option value="${p.name}">${p.name}</option>`).join('');
         sel.value = data.current;
         note.textContent = describeWorkflow(data.presets, data.current);
-        note.style.color = '#666';
+        note.style.color = '#9b9086';
     } catch (e) {
         note.textContent = '工作流预设加载失败: ' + e.message;
-        note.style.color = '#c62828';
+        note.style.color = '#ff6a5a';
     }
 }
 
@@ -160,7 +160,7 @@ async function onWorkflowChange() {
     const note = document.getElementById('settings-workflow-note');
     const name = sel.value;
     note.textContent = '切换中…';
-    note.style.color = '#666';
+    note.style.color = '#9b9086';
     try {
         const resp = await fetch('/api/workflows', {
             method: 'POST',
@@ -170,10 +170,10 @@ async function onWorkflowChange() {
         const data = await resp.json();
         if (!data.success) throw new Error(data.error || '切换失败');
         note.textContent = `已切换到 ${name}（下次生成起生效）`;
-        note.style.color = '#2e7d32';
+        note.style.color = '#3fc98d';
     } catch (e) {
         note.textContent = '切换失败: ' + e.message;
-        note.style.color = '#c62828';
+        note.style.color = '#ff6a5a';
     }
 }
 
@@ -230,14 +230,14 @@ async function testSettingsConnection() {
         const data = await resp.json();
         if (data.ok) {
             result.textContent = `✓ 连接成功（${data.elapsed_ms}ms）模型 ${data.model}${data.reasoning ? '（推理模型）' : ''}`;
-            result.style.color = '#2e7d32';
+            result.style.color = '#3fc98d';
         } else {
             result.textContent = '✗ 连接失败: ' + (data.error || '未知错误');
-            result.style.color = '#c62828';
+            result.style.color = '#ff6a5a';
         }
     } catch (e) {
         result.textContent = '✗ 请求失败: ' + e.message;
-        result.style.color = '#c62828';
+        result.style.color = '#ff6a5a';
     } finally {
         btn.disabled = false;
     }

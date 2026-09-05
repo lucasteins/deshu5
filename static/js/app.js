@@ -23,6 +23,17 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // 切换模式
+const MODE_META = {
+    training: ['训练模式', '出题 · 合理性评价 · SQL 生成 · 结果判断'],
+    qa: ['智能问答', 'RAG 检索 · SQL 生成 · 执行验证'],
+    'qa-lib': ['问答对库', '已沉淀的标准问答对，支持语义搜索'],
+    errors: ['错题集', '生成错误记录与修复跟踪'],
+    resource: ['数据资源', '目录 · 图谱 · 码值库 · 资源管理'],
+    provision: ['素材提资', '上传解析 · 校验映射 · 执行转换 · 人工复核'],
+    ontology: ['本体模型', '实体 · 关系 · 码值枚举 · 变更提案'],
+    stats: ['统计看板', '基础数据 · 知识库 · 工作流运行'],
+    report: ['深度分析', '报告生成 · 历史报告 · 模板管理']
+};
 function switchMode(mode) {
     document.querySelectorAll('.mode-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-subitem, .nav-single').forEach(n => n.classList.remove('active'));
@@ -34,6 +45,14 @@ function switchMode(mode) {
         sub.classList.add('active');
         const group = sub.closest('.nav-group');
         if (group) group.classList.add('active');  // 一级模块保持高亮，标识当前位置
+    }
+
+    const meta = MODE_META[mode];
+    if (meta) {
+        const t = document.getElementById('page-title');
+        const st = document.getElementById('page-subtitle');
+        if (t) t.textContent = meta[0];
+        if (st) st.textContent = meta[1];
     }
 
     if (mode === 'stats') loadStats();

@@ -133,7 +133,7 @@ function closeTableDetail() {
 
 /* ==================== 图谱模式 ==================== */
 
-const LAYER_COLORS = { dim: '#2F80ED', dwd: '#EB5757', other: '#A8A294' };
+const LAYER_COLORS = { dim: '#5aa2ff', dwd: '#ff7a72', other: '#9b9086' };
 let G = null;   // 图谱状态
 
 function initGraphData() {
@@ -254,7 +254,7 @@ function graphDraw() {
         const [x2, y2] = gw2s(b.x, b.y);
         const alpha = edgeAlpha(e);
         const isHot = G.hoverEdge === e || (hasPath && G.pathEdges.has(e));
-        ctx.strokeStyle = isHot ? '#D97757' : `rgba(110, 106, 95, ${alpha})`;
+        ctx.strokeStyle = isHot ? '#ff7a1a' : `rgba(155, 144, 134, ${alpha})`;
         ctx.lineWidth = isHot ? 2 : 1;
         ctx.beginPath();
         ctx.moveTo(x1, y1);
@@ -279,17 +279,17 @@ function graphDraw() {
         ctx.arc(x, y, Math.max(4, r), 0, Math.PI * 2);
         ctx.fill();
         if (isSel || isHover || (hasPath && G.pathNodes.has(name))) {
-            ctx.strokeStyle = '#D97757';
+            ctx.strokeStyle = '#ff7a1a';
             ctx.lineWidth = 2.5;
             ctx.stroke();
         }
         // 标签：注释主标签 + 表名副标签
         ctx.globalAlpha = Math.min(1, alpha + 0.15);
-        ctx.fillStyle = '#141413';
+        ctx.fillStyle = '#f2ece4';
         ctx.font = '600 11px "PingFang SC", "Microsoft YaHei", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(n.comment || name, x, y + Math.max(4, r) + 14);
-        ctx.fillStyle = '#A8A294';
+        ctx.fillStyle = '#9b9086';
         ctx.font = '9px "JetBrains Mono", Menlo, monospace';
         ctx.fillText(name, x, y + Math.max(4, r) + 26);
         ctx.globalAlpha = 1;
@@ -369,7 +369,7 @@ function bindGraphEvents(cv) {
             tip.style.left = (ev.clientX + 14) + 'px';
             tip.style.top = (ev.clientY - 10) + 'px';
             tip.innerHTML = `<b>${_escapeHtml(n.comment || n.name)}</b><br>` +
-                `<span style="color:#A8A294;font-family:monospace">${n.name}</span><br>` +
+                `<span style="color:#9b9086;font-family:monospace">${n.name}</span><br>` +
                 `字段 ${n.column_count} · 关联 ${n.rel_count}`;
         } else if (G.hoverEdge) {
             cv.style.cursor = 'pointer';
@@ -801,7 +801,7 @@ function _resAdminBuildForm(item) {
     }
     form.innerHTML = RES_ADMIN.schema.map(spec => {
         const f = spec.field;
-        const req = spec.required ? ' <span style="color:#c00">*</span>' : '';
+        const req = spec.required ? ' <span style="color:#ff6a5a">*</span>' : '';
         let v = item[f];
         if (v === null || v === undefined) v = (f === 'enabled' ? 1 : '');
         const fid = `res-admin-f-${f}`;
@@ -925,7 +925,7 @@ async function resAdminImport(input) {
         const r = await fetch(`/api/resources/${RES_ADMIN.rtype}/import`, { method: 'POST', body: fd });
         const d = await r.json();
         if (!d.success) {
-            box.innerHTML = `<p class="hint" style="color:#c00">导入失败: ${_escapeHtml(d.error || '')}</p>`;
+            box.innerHTML = `<p class="hint" style="color:#ff6a5a">导入失败: ${_escapeHtml(d.error || '')}</p>`;
             return;
         }
         let html = `<p class="hint">导入完成：接收 ${d.accepted} 条，拒绝 ${d.rejected.length} 条</p>`;
@@ -941,6 +941,6 @@ async function resAdminImport(input) {
         box.innerHTML = html;
         loadResAdminItems();
     } catch (e) {
-        box.innerHTML = `<p class="hint" style="color:#c00">导入失败: ${_escapeHtml(e.message)}</p>`;
+        box.innerHTML = `<p class="hint" style="color:#ff6a5a">导入失败: ${_escapeHtml(e.message)}</p>`;
     }
 }

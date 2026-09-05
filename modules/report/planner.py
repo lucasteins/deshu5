@@ -38,13 +38,17 @@ _PLAN_PROMPT = '''把用户的报告意图拆解为一组标准化取数问题�
 【数据底座实体（主数据/业务数据/统计报表三层，供选题参考）】
 {entities}
 
+【统计报表清单（ads 层，表名+中文名，选题必须优先从这里取数）】
+{report_tables}
+
 拆解要求：
 1. 每道问题必须是完整自含的一句话：显式带上单位范围与统计期间（如"2026年3月""杭州公司"），禁止省略上下文、禁止使用"该单位/当月"等指代；
 2. 每道问题只问一个主题，能用一条 SELECT 查询回答（统计/排名/明细清单均可）；
 3. 问题总数 4~{max_q} 道，按报告章节组织；
 4. 若用户提到多家单位（如"浙江公司/杭州公司"），关键指标问题应同时覆盖各单位（可用同一问题的分组统计覆盖，不必逐单位重复出题）；
 5. 若大纲章节给出了【问数问题】，优先沿用这些问题（按用户意图补全单位/期间后可原样使用），不足时再补充；
-6. 只输出严格 JSON，不要输出其他任何文字：
+6. 意图命中【统计报表清单】中的报表时（如"统计局""月度数据""年鉴"），问题必须围绕这些报表的指标出，禁止虚构清单外的数据口径；
+7. 只输出严格 JSON，不要输出其他任何文字：
 {{"report_title": "报告标题",
   "org_scope": ["单位1", "单位2"],
   "period": "统计期间，如 2026年3月",
@@ -137,13 +141,52 @@ class ReportPlanner:
         except Exception:
             return []
 
-    def _entity_vocab(self) -> list:
+    def _entity_vocab(self, intent_text: str = '') -> list:
+        """本体实体词表：按用户意图相关性排序（意图词命中实体 名称/标签/注释/成员表名），
+        命中实体排在前面并带标签与成员表，其余仅列名。"""
         try:
             svc = get_ontology_service()
-            names = [e.get('name') for e in svc.get_entities() if e.get('name')]
-            return names[:60]
+            ents = [e for e in svc.get_entities() if e.get('name')]
         except Exception:
             return []
+        if not intent_text:
+            return [e['name'] for e in ents][:60]
+        # 意图关键词：复用平台 RAG 分词（jieba），与检索链路同口径
+        try:
+            kws = {w for w in rag_retriever.extract_keywords(intent_text) if len(w) >= 2}
+        except Exception:
+            kws = {w for w in re.split(r'[\s，。,。？?、的了与和及在到分别是多少怎样如何阶段情况]+', intent_text)
+                   if len(w) >= 2}
+        scored = []
+        for e in ents:
+            text = f"{e.get('name')}{e.get('label')}{e.get('comment')}{' '.join(e.get('member_tables') or [])}"
+            score = sum(1 for kw in kws if kw in text)
+            scored.append((score, e))
+        scored.sort(key=lambda kv: -kv[0])
+        out = []
+        for score, e in scored[:60]:
+            if score > 0:
+                members = '、'.join((e.get('member_tables') or [])[:6])
+                out.append(f"{e.get('label') or e['name']}（{e['name']}：{members}）")
+            else:
+                out.append(e['name'])
+        return out
+
+    def _report_table_vocab(self) -> str:
+        """ads 层统计报表清单（表名 + 中文注释），供 LLM 选题落地。
+        来源：SchemaPreloader（information_schema 权威），取注释前 30 字。"""
+        try:
+            from core.schema_preloader import SchemaPreloader
+            pre = SchemaPreloader.get_instance()
+            lines = []
+            for t in pre.get_table_names():
+                if not t.startswith('ads_'):
+                    continue
+                comment = (pre.get_table_comment(t) or '').split('（')[0][:30]
+                lines.append(f'{t}（{comment}）' if comment else t)
+            return '、'.join(lines) or '（无）'
+        except Exception:
+            return '（未配置）'
 
     # ---------- 主流程 ----------
 
@@ -287,7 +330,8 @@ class ReportPlanner:
             today=datetime.now().strftime('%Y-%m-%d'),
             template_block=template_block,
             domains='、'.join(self._domain_vocab()) or '（未配置）',
-            entities='、'.join(self._entity_vocab()) or '（未配置）',
+            entities='、'.join(self._entity_vocab(intent_text)) or '（未配置）',
+            report_tables=self._report_table_vocab(),
             max_q=MAX_QUESTIONS,
         )
         resp = call_chat(

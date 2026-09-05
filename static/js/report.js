@@ -112,7 +112,7 @@ function renderReportPlan() {
             const badge = q.source === 'qa_pair'
                 ? `<span class="report-src-badge qa">标准问答对#${q.qa_id} ${(q.match_score || 0).toFixed(2)}</span>`
                 : (q.from_template
-                    ? `<span class="report-src-badge qa" style="border-color:#8e44ad;color:#8e44ad;background:rgba(142,68,173,0.12);">模板问题#${q.qa_id || ''}</span>`
+                    ? `<span class="report-src-badge qa" style="border-color:#c792ea;color:#c792ea;background:rgba(199,146,234,0.12);">模板问题#${q.qa_id || ''}</span>`
                     : '<span class="report-src-badge gen">实时生成</span>');
             if (readonly) {
                 html += `<div class="report-plan-q" data-qid="${q.qid}">

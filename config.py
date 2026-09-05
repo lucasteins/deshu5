@@ -91,6 +91,9 @@ AUX_MODEL = os.environ.get('AUX_MODEL', 'deepseek-chat')
 GEN_SQL_AUDIT = os.environ.get('GEN_SQL_AUDIT', 'true').lower() in ('true', '1', 'yes')
 GEN_DRAFT_EFFORT = os.environ.get('GEN_DRAFT_EFFORT', 'none')
 GEN_AUDIT_EFFORT = os.environ.get('GEN_AUDIT_EFFORT', 'low')
+# 审计段是否开思考：默认 False（2026-09-04 提速：思考型审计实测 4~23s/题且随平台波动，
+# no-think 审计秒级返回；需要更强审计时 env 置 true）
+GEN_AUDIT_THINKING = os.environ.get('GEN_AUDIT_THINKING', 'false').lower() in ('true', '1', 'yes')
 
 # ==================== 智能出题 ====================
 QGEN_BATCH_SIZE = int(os.environ.get('QGEN_BATCH_SIZE', '3'))

@@ -20,3 +20,9 @@ db/*.sql
 db/export/
 *.bak.sql
 data/*_bak_*.sql
+
+# 历史归档（清理移入的无用/测试文件，勿上传）
+history/
+
+# 外部工具记忆目录（自动再生）
+.workbuddy/

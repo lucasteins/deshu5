@@ -7,6 +7,14 @@ import config
 from core.database import DatabaseManager
 
 
+def _alias_safe(comment: str) -> str:
+    """别名纪律（与 sql_generator._clean_aliases 同规则）：核心词组、≤8 汉字、禁标点。
+    列注释常带括注/斜杠（'地区名称（全国/省/城市）'），原样进别名会被 MySQL 拒。"""
+    c = re.split(r'[（(]', comment or '')[0]          # 去括号注
+    c = re.split(r'[，,、；;：:／/\s]', c)[0]           # 去标点截断
+    return c[:8]
+
+
 class SQLAliasTranslator:
     """
     SQL 别名翻译器（v2.5 两段式分离）
@@ -139,6 +147,8 @@ class SQLAliasTranslator:
                 
                 # 获取字段注释
                 comment = field_comments.get(bare_name) if bare_name else None
+                if comment:
+                    comment = _alias_safe(comment)
                 
                 # 生成显示别名
                 if expr_type == 'count_star':
