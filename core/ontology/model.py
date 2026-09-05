@@ -312,12 +312,14 @@ def diff_ontologies(old: 'Ontology', new: 'Ontology') -> dict:
     e_changed = sorted(
         ({'name': k,
           'old': {'label': old_e[k].label, 'layer': old_e[k].layer,
-                  'member_tables': old_e[k].member_tables},
+                  'member_tables': old_e[k].member_tables,
+                  'comment': (old_e[k].comment or '')[:120]},
           'new': {'label': new_e[k].label, 'layer': new_e[k].layer,
-                  'member_tables': new_e[k].member_tables}}
+                  'member_tables': new_e[k].member_tables,
+                  'comment': (new_e[k].comment or '')[:120]}}
          for k in set(old_e) & set(new_e)
-         if (old_e[k].label, old_e[k].layer, old_e[k].member_tables)
-            != (new_e[k].label, new_e[k].layer, new_e[k].member_tables)),
+         if (old_e[k].label, old_e[k].layer, old_e[k].member_tables, old_e[k].comment)
+            != (new_e[k].label, new_e[k].layer, new_e[k].member_tables, new_e[k].comment)),
         key=lambda x: x['name'])
     entity_diff = {'added': e_added, 'removed': e_removed, 'changed': e_changed}
 

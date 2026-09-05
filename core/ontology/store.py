@@ -108,7 +108,7 @@ class OntologyStore:
                     layer VARCHAR(16),
                     parent VARCHAR(64),
                     member_tables TEXT,
-                    comment VARCHAR(255),
+                    comment TEXT,
                     version INT,
                     UNIQUE KEY uk_oent (name, version)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -121,7 +121,7 @@ class OntologyStore:
                     layer VARCHAR(16),
                     parent VARCHAR(64),
                     member_tables TEXT,
-                    comment VARCHAR(255),
+                    comment TEXT,
                     enabled TINYINT(1) DEFAULT 1,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE KEY uk_oedf (name)
@@ -140,6 +140,18 @@ class OntologyStore:
                     INDEX idx_op_fp (base_fingerprint)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ''')
+            # 实体描述扩容迁移：存量库 comment VARCHAR(255) → TEXT（幂等，已是 TEXT 则跳过）
+            for tbl in ('ontology_entities', 'ontology_entity_defs'):
+                try:
+                    row = conn.execute(
+                        "SELECT DATA_TYPE FROM information_schema.COLUMNS "
+                        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? "
+                        "AND COLUMN_NAME = 'comment'", (tbl,)).fetchone()
+                    if row and row[0] in ('varchar', 'char'):
+                        conn.execute(f'ALTER TABLE {tbl} MODIFY COLUMN comment TEXT')
+                        print(f'[Ontology] {tbl}.comment 已扩容为 TEXT', flush=True)
+                except Exception as e:
+                    print(f'[WARN] {tbl}.comment 扩容失败（不阻断启动）: {e}', flush=True)
             conn.commit()
 
     # ==================== 生效版本 ====================
@@ -280,6 +292,23 @@ class OntologyStore:
         except Exception as e:
             print(f'[WARN] 读取实体映射定义失败: {e}', flush=True)
             return []
+
+    def get_entity_def(self, name: str) -> Optional[dict]:
+        """读取单个实体映射定义（enabled=1）。不存在/异常返回 None。"""
+        try:
+            with self.db.connect_ontology() as conn:
+                row = conn.execute(
+                    'SELECT name, label, layer, parent, member_tables, comment '
+                    'FROM ontology_entity_defs WHERE name = ? AND enabled = 1',
+                    (name,)).fetchone()
+            if not row:
+                return None
+            return {'name': row[0], 'label': row[1] or '', 'layer': row[2] or 'business',
+                    'parent': row[3] or '', 'member_tables': json.loads(row[4] or '[]'),
+                    'comment': row[5] or ''}
+        except Exception as e:
+            print(f'[WARN] 读取实体映射定义失败: {e}', flush=True)
+            return None
 
     def seed_entity_defs(self, defs: List[dict]):
         """实体定义表为空时播种（默认映射）。返回是否执行了播种。"""

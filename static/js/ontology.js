@@ -223,6 +223,7 @@ function renderOntoEntities() {
         `<div class="catalog-card" onclick="ontoEntityDetail('${_ontoEsc(e.name)}')" style="cursor:pointer">` +
         `<div class="catalog-card-title">${_ontoEsc(e.label || e.name)}</div>` +
         `<div class="catalog-card-name">${_ontoEsc(e.name)} · ${ONTO_LAYER_BADGE[e.layer] || e.layer} · ${e.member_count} 表</div>` +
+        (e.comment ? `<div class="hint" style="margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${_ontoEsc(e.comment.length > 80 ? e.comment.slice(0, 80) + '…' : e.comment)}</div>` : '') +
         `</div>`).join('') || '<div class="hint">无匹配实体</div>';
 }
 
@@ -230,6 +231,11 @@ async function ontoEntityDetail(name, targetEl) {
     try {
         const d = await _ontoGet(`/api/ontology/entities/${encodeURIComponent(name)}`);
         const e = d.entity;
+        const def = d.def || null;  // 映射定义（编辑草稿源）；无定义时回退生效版本字段
+        const editLabel = def ? def.label : e.label;
+        const editLayer = def ? def.layer : e.layer;
+        const editMembers = def ? (def.member_tables || []) : (e.member_tables || []);
+        const editComment = def ? (def.comment || '') : (e.comment || '');
         const el = document.getElementById(targetEl || 'onto-entity-detail');
         const members = (d.members || []).map(m =>
             `<tr><td><code>${_ontoEsc(m.table)}</code></td><td>${_ontoEsc(m.label)}</td>` +
@@ -241,20 +247,25 @@ async function ontoEntityDetail(name, targetEl) {
         el.innerHTML =
             `<h3>${_ontoEsc(e.label || e.name)} <span class="hint">${_ontoEsc(e.name)} · ` +
             `${ONTO_LAYER_BADGE[e.layer] || e.layer}</span></h3>` +
+            (e.comment ? `<p style="margin:8px 0 0;">${_ontoEsc(e.comment)}</p>`
+                       : `<p class="hint" style="margin:8px 0 0;">暂无描述（可在下方映射编辑中补充，或点击「AI 生成描述」自动生成）</p>`) +
             `<table class="data-table"><thead><tr><th>成员物理表</th><th>中文名</th><th>在库</th></tr></thead>` +
             `<tbody>${members}</tbody></table>` +
             (rels ? `<h4 style="margin-top:10px;">实体间关系</h4><ul>${rels}</ul>` : '') +
             `<h4 style="margin-top:10px;">映射编辑（保存后需手动重建并审批生效）</h4>` +
             `<div style="display:flex; gap:8px; align-items:flex-start; flex-wrap:wrap;">` +
-            `<input type="text" class="search-input" id="onto-ent-label" value="${_ontoEsc(e.label)}" placeholder="实体中文名" style="max-width:220px">` +
+            `<input type="text" class="search-input" id="onto-ent-label" value="${_ontoEsc(editLabel)}" placeholder="实体中文名" style="max-width:220px">` +
             `<select class="filter-select" id="onto-ent-layer">` +
             ['master', 'business', 'report'].map(l =>
-                `<option value="${l}"${e.layer === l ? ' selected' : ''}>${ONTO_LAYER_BADGE[l]}</option>`).join('') +
+                `<option value="${l}"${editLayer === l ? ' selected' : ''}>${ONTO_LAYER_BADGE[l]}</option>`).join('') +
             `</select></div>` +
             `<textarea id="onto-ent-members" style="width:100%; min-height:110px; margin-top:8px; font-family:monospace;"` +
-            ` placeholder="成员物理表，每行一个">${(e.member_tables || []).map(_ontoEsc).join('\n')}</textarea>` +
-            `<div style="margin-top:6px;">` +
+            ` placeholder="成员物理表，每行一个">${editMembers.map(_ontoEsc).join('\n')}</textarea>` +
+            `<textarea id="onto-ent-comment" style="width:100%; min-height:72px; margin-top:8px;"` +
+            ` placeholder="实体描述（业务含义 / 数据范围 / 典型分析场景），可点击「AI 生成描述」自动生成后修改">${_ontoEsc(editComment)}</textarea>` +
+            `<div style="margin-top:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">` +
             `<button class="btn btn-sm btn-primary" onclick="ontoEntitySave('${_ontoEsc(e.name)}')">保存映射</button>` +
+            `<button class="btn btn-sm btn-secondary" id="onto-ent-describe-btn" onclick="ontoEntityDescribe('${_ontoEsc(e.name)}')">AI 生成描述</button>` +
             `<span class="hint">保存写入映射定义表，经「手动重建 → 提案审批」后进入生效版本</span></div>`;
         el.style.display = 'block';
         el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -263,16 +274,72 @@ async function ontoEntityDetail(name, targetEl) {
     }
 }
 
+async function ontoEntityDescribe(name) {
+    const btn = document.getElementById('onto-ent-describe-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '生成中…'; }
+    try {
+        const d = await fetch(`/api/ontology/entity-defs/${encodeURIComponent(name)}/describe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apply: false }),
+        }).then(r => r.json());
+        if (!d.success) throw new Error(d.error || '生成失败');
+        const ta = document.getElementById('onto-ent-comment');
+        if (ta) ta.value = d.comment || '';
+        alert('已生成描述并回填编辑框，请确认后点击「保存映射」。');
+    } catch (e) {
+        alert('AI 生成描述失败: ' + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'AI 生成描述'; }
+    }
+}
+
+async function ontoEntityBatchDescribe() {
+    if (!confirm('将调用 LLM 为所有缺失描述的实体生成描述，并直接写入映射定义表（仍需「手动重建 → 提案审批」后生效）。继续？')) return;
+    const btn = document.getElementById('onto-entity-batch-desc');
+    const orig = btn ? btn.textContent : '';
+    const failures = [];
+    try {
+        const defsRes = await _ontoGet('/api/ontology/entity-defs');
+        const missing = (defsRes.items || []).filter(d => !(d.comment || '').trim());
+        if (!missing.length) { alert('所有实体均已有描述，无需补全'); return; }
+        let done = 0;
+        for (const d of missing) {
+            if (btn) btn.textContent = `AI 补全中 ${done + 1}/${missing.length}…`;
+            try {
+                const r = await fetch(`/api/ontology/entity-defs/${encodeURIComponent(d.name)}/describe`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apply: true }),
+                }).then(r => r.json());
+                if (!r.success) throw new Error(r.error || '失败');
+            } catch (e) {
+                failures.push(`${d.name}: ${e.message}`);
+            }
+            done++;
+        }
+        let msg = `补全完成：成功 ${missing.length - failures.length} / ${missing.length}。` +
+            `需「手动重建 → 提案审批」后描述才进入生效版本。`;
+        if (failures.length) msg += `\n\n失败清单:\n${failures.join('\n')}`;
+        alert(msg);
+    } catch (e) {
+        alert('批量补全失败: ' + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = orig; }
+    }
+}
+
 async function ontoEntitySave(name) {
     const label = document.getElementById('onto-ent-label').value.trim();
     const layer = document.getElementById('onto-ent-layer').value;
     const members = document.getElementById('onto-ent-members').value
         .split(/[\s,，、]+/).map(s => s.trim()).filter(Boolean);
+    const comment = (document.getElementById('onto-ent-comment').value || '').trim();
     try {
         const d = await fetch(`/api/ontology/entity-defs/${encodeURIComponent(name)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ label, layer, member_tables: members }),
+            body: JSON.stringify({ label, layer, member_tables: members, comment }),
         }).then(r => r.json());
         if (!d.success) throw new Error(d.error || '保存失败');
         alert(d.note || '已保存');

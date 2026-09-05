@@ -181,8 +181,10 @@ def entity_detail(name: str):
                             'exists': c is not None})
         rels = [r for r in svc.get_entity_relations()
                 if name in (r['from_entity'], r['to_entity'])]
-        return jsonify({'success': True, 'entity': e, 'members': members,
-                        'entity_relations': rels})
+        svc.store.init_tables()
+        return jsonify({'success': True, 'entity': e,
+                        'def': svc.store.get_entity_def(name),
+                        'members': members, 'entity_relations': rels})
     except Exception as e:
         return _err(e)
 
@@ -207,6 +209,61 @@ def entity_defs():
         return jsonify({'success': True, 'items': items, 'total': len(items)})
     except Exception as e:
         return _err(e)
+
+
+@bp.route('/entity-defs/<name>/describe', methods=['POST'])
+def entity_def_describe(name: str):
+    """LLM 生成实体描述。body: {apply?: bool}
+    apply=false（默认）仅返回生成的描述（前端回填编辑框，人工确认后随保存落库）；
+    apply=true 直接写入映射定义表（批量补全用，仍经「手动重建→审批」进生效版本）。"""
+    try:
+        from flask import request
+        payload = {}
+        try:
+            payload = request.get_json(force=True) or {}
+        except Exception:
+            pass
+        apply = bool(payload.get('apply'))
+        svc = _svc()
+        svc._ensure_loaded()
+        svc.store.init_tables()
+        d = svc.store.get_entity_def(name)
+        if d is None:
+            return jsonify({'success': False, 'error': f'实体定义不存在: {name}'}), 404
+        # 组装真实 Schema 上下文：成员表 + 每表关键列（主键/有中文名的列，截前 12 个）
+        ont = svc._ont
+        lines = []
+        for t in d['member_tables']:
+            label = ont.classes[t].label if ont and t in ont.classes else ''
+            cols = []
+            if ont:
+                cols = [f'{p.name}({p.label})' for p in ont.properties
+                        if p.class_name == t and (p.is_pk or p.label)][:12]
+            lines.append(f'- {t}（{label}）：{"; ".join(cols) if cols else "无列信息"}')
+        context = '\n'.join(lines)
+        from core.llm_config import call_chat
+        prompt = (
+            '你是电力营销与电网数据治理专家。请为以下业务实体写一段简洁的中文描述（120-200字），'
+            '说明其业务含义、涵盖的数据范围与典型分析场景。'
+            '只能基于给定信息概括，禁止编造未提及的表、列或数值。\n\n'
+            f'实体名: {name}（{d["label"]}，层级: {d["layer"]}）\n'
+            f'成员物理表及关键列:\n{context}\n\n'
+            '直接输出描述正文，不要任何前后缀。'
+        )
+        resp = call_chat([{'role': 'user', 'content': prompt}],
+                         max_tokens=2000, thinking=False)
+        desc = (resp.get('content') or '').strip()
+        if not desc:
+            return jsonify({'success': False, 'error': 'LLM 返回空内容'}), 502
+        if apply:
+            svc.store.upsert_entity_def({**d, 'comment': desc})
+        return jsonify({'success': True, 'name': name, 'comment': desc, 'applied': apply,
+                        'note': ('描述已写入映射定义' if apply else '描述已生成（未保存，请在编辑框确认后保存）')
+                                + '；需「手动重建」生成提案并审批后进入生效版本'})
+    except ValueError as e:
+        return _err(e, 400)
+    except Exception as e:
+        return _err(e, 502)
 
 
 @bp.route('/entity-defs/<name>', methods=['PUT'])
