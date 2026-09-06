@@ -5,6 +5,8 @@
 链路：mgop h5 网关（免 token，sign=md5("token=&ak=..&api=..&ts=..&data=null")），
      经 Playwright 驱动本机 Chrome 发起（源站 WAF 拦截非浏览器 UA，故不走裸 curl）。
 流程：主题×报告期 → queryMCdDetailByZt 一次拿全主题表（HTML）→ 解析 → 窄表入库。
+入库：增量模式（2026-09 起）——CREATE TABLE IF NOT EXISTS + 仅按本次报告期 DELETE 重插，
+     其他期间存量数据不动（早期为 DROP 重建，会清掉已有期间，已废弃）。
 
 主题 → ADS 表（14 张）：
   2 GDP→gdp / 3 工业→industry / 4 交通邮电→transport / 8 价格→price / 11 主要指标→main /
@@ -19,6 +21,7 @@
   python tools/crawl_tjj_monthly.py --dry-run          # 只抓 + 打印解析结果
   python tools/crawl_tjj_monthly.py                    # 抓取 + 入库 + 三库同步
   python tools/crawl_tjj_monthly.py --bgq 20260005     # 只跑 5 月
+  python tools/crawl_tjj_monthly.py --from 202501 --to 202604   # 跑 2025-01 ~ 2026-04 区间
 """
 import argparse
 import hashlib
@@ -243,9 +246,24 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--bgq', default='', help='只跑一个报告期，如 20260005')
+    ap.add_argument('--from', dest='bgq_from', default='', help='区间起始月 yyyymm，如 202501')
+    ap.add_argument('--to', dest='bgq_to', default='', help='区间截止月 yyyymm，如 202604（含）')
     args = ap.parse_args()
-    bgqs = [args.bgq] if args.bgq else ['20260005', '20260006']
+    if args.bgq:
+        bgqs = [args.bgq]
+    elif args.bgq_from or args.bgq_to:
+        y, m = int(args.bgq_from[:4]), int(args.bgq_from[4:6])
+        end_y, end_m = int(args.bgq_to[:4]), int(args.bgq_to[4:6])
+        bgqs = []
+        while (y, m) <= (end_y, end_m):
+            bgqs.append(f'{y}00{m:02d}')
+            m += 1
+            if m > 12:
+                y, m = y + 1, 1
+    else:
+        bgqs = ['20260005', '20260006']
     periods = {b: bgq_to_period(b) for b in bgqs}
+    print('报告期:', ' '.join(f'{b}({periods[b]})' for b in bgqs))
 
     gb_idx = build_gb_index(load_gb())
     browser = MgopBrowser()
@@ -279,22 +297,28 @@ def main():
                 print('    样例:', r)
         return
 
-    # ============ 物理入库 ============
+    # ============ 物理入库（增量：建表 IF NOT EXISTS + 仅按本次报告期删除重插，不动其他期间） ============
     biz = connect(DB_BIZ)
     now = datetime.now()
+    scope_periods = sorted(set(periods.values()))
+    ph = ','.join(['%s'] * len(scope_periods))
+    total_counts = {}
     with biz.cursor() as cur:
         for _zc, _zn, table, theme_cn in {t[2]: (t[0], t[1], t[2], t[3]) for t in THEMES}.values():
             rows = parsed.get(table, [])
-            cur.execute(f'DROP TABLE IF EXISTS `{table}`')
-            cur.execute(narrow_ddl(table, theme_cn))
-            cur.executemany(
-                f'INSERT INTO `{table}` (stat_period, report_name, region_name, region_adcode, '
-                f'region_level, dim_name, indicator_name, unit, meas_value, etl_time) '
-                f'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
-                [(p, rp, rn, ac, lv, dn, ind, u, v, now) for (p, rp, rn, ac, lv, dn, ind, u, v) in rows])
+            cur.execute(narrow_ddl(table, theme_cn).replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS', 1))
+            cur.execute(f'DELETE FROM `{table}` WHERE stat_period IN ({ph})', scope_periods)
+            if rows:
+                cur.executemany(
+                    f'INSERT INTO `{table}` (stat_period, report_name, region_name, region_adcode, '
+                    f'region_level, dim_name, indicator_name, unit, meas_value, etl_time) '
+                    f'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                    [(p, rp, rn, ac, lv, dn, ind, u, v, now) for (p, rp, rn, ac, lv, dn, ind, u, v) in rows])
+            cur.execute(f'SELECT COUNT(*) FROM `{table}`')
+            total_counts[table] = cur.fetchone()[0]
             biz.commit()
             n_region = sum(1 for r in rows if r[4] != '省')  # 非省级（城市/区县）行数
-            print(f'  [ok] {table}: {len(rows)} 行（其中城市/区县行 {n_region}）')
+            print(f'  [ok] {table}: 本次 +{len(rows)} 行（城市/区县 {n_region}），全表 {total_counts[table]} 行')
 
     # ============ 治理库同步 ============
     print('== 治理库同步 ==')
@@ -318,8 +342,7 @@ def main():
         cur.execute('DELETE FROM code_value_column_form WHERE code_name=%s', ('tjj_dim_type',))
         for table in done_tables:
             theme_cn = next(t[3] for t in THEMES if t[2] == table)
-            rows = parsed.get(table, [])
-            rc = len(rows)
+            rc = total_counts.get(table, len(parsed.get(table, [])))  # 全表行数（含存量期间）
             doc_text = (f'表 {table}，中文注释：{theme_cn}，{rc} 行数据，{len(NARROW_COLS)} 个字段。'
                         f'主题窄表（行列转换：report_name/region_*/dim_name/indicator_name/meas_value），'
                         f'地区轴 region_name/region_adcode/region_level（GB/T 2260，整库默认浙江省 330000），'
