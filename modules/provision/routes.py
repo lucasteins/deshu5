@@ -214,6 +214,40 @@ def provision_review_confirm(prov_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/provision/review/<int:prov_id>/reject', methods=['POST'])
+def provision_review_reject(prov_id):
+    """复核否决：不同意变更，保留库内现状（不回填目标表，仅 pending 可否决）。"""
+    try:
+        updated = pv.reject_provenance(prov_id)
+        return jsonify({'success': True, 'item': updated})
+    except LookupError as e:
+        return jsonify({'success': False, 'error': str(e)}), 404
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/provision/review/batch-reject', methods=['POST'])
+def provision_review_batch_reject():
+    """批量复核否决：不同意变更、保留库内现状（不改数据，无优先级限制）。"""
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids') or []
+    if not ids:
+        return jsonify({'success': False, 'error': '未选择记录'}), 400
+    if len(ids) > 2000:
+        return jsonify({'success': False, 'error': f'单批最多 2000 条（本次 {len(ids)}）'}), 400
+    try:
+        result = pv.batch_reject([int(i) for i in ids])
+        return jsonify({'success': True, **result})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/api/provision/<run_id>/finish', methods=['POST'])
 def provision_finish(run_id):
     """收尾：run → finished（report 剩余 pending 数）。"""

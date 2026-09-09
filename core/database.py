@@ -273,7 +273,7 @@ def init_generation_logs_table():
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 session_id VARCHAR(64),
                 user_question TEXT,
-                generation_mode VARCHAR(16),
+                generation_mode VARCHAR(32),
                 tables_involved TEXT,
                 generation_strategy VARCHAR(32),
                 difficulty VARCHAR(16),
@@ -309,7 +309,7 @@ def init_generation_logs_table():
                 pass
         _ensure_columns(conn, 'generation_logs', {
             'user_feedback': 'TEXT',
-            'generation_mode': 'VARCHAR(16)',
+            'generation_mode': 'VARCHAR(32)',
             'post_execution_audit': 'TEXT',
             'table_choice_correct': 'TINYINT(1)',
             'field_choice_correct': 'TINYINT(1)',
@@ -371,13 +371,19 @@ def init_code_values_tables():
             CREATE TABLE IF NOT EXISTS code_value_items (
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 code_name VARCHAR(64),
-                item_code VARCHAR(32),
+                item_code VARCHAR(64),
                 item_name VARCHAR(255),
                 sort_order INT,
                 INDEX idx_code_name (code_name),
                 INDEX idx_item_name (item_name)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ''')
+        # path_org_code 等路径类码值 item_code 为多级编码拼接（实测 33 字符），
+        # VARCHAR(32) 不够；幂等扩到 64（与 code_name 同宽）
+        try:
+            conn.execute('ALTER TABLE code_value_items MODIFY COLUMN item_code VARCHAR(64)')
+        except Exception:
+            pass
         conn.execute('''
             CREATE TABLE IF NOT EXISTS code_value_column_form (
                 id INT PRIMARY KEY AUTO_INCREMENT,

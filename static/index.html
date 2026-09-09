@@ -67,6 +67,7 @@
                         <div class="flow-title">出题</div>
                         <div class="flow-meta">
                             <span class="difficulty-badge" id="difficulty-badge">难度: 进阶题</span>
+                            <span class="difficulty-badge" id="domain-badge" style="background:var(--track);color:var(--muted);border-color:var(--line);">业务域: 不限</span>
                             <span class="timing-badge" id="training-timing-badge" style="display:none"></span>
                         </div>
                     </div>
@@ -91,6 +92,15 @@
                             </span>
                         </div>
                     </div>
+                </div>
+                <div style="margin-top:14px;">
+                    <div class="cp-label" style="margin-bottom:6px;">出题业务域</div>
+                    <select class="filter-select" id="training-domain-l1" style="width:100%;" title="一级业务域" onchange="onDomainL1Change()">
+                        <option value="">全部业务域</option>
+                    </select>
+                    <select class="filter-select" id="training-domain-l2" style="width:100%;margin-top:8px;" title="二级业务域（跟随一级域联动）" onchange="updateDomainBadge()">
+                        <option value="">全部二级域</option>
+                    </select>
                 </div>
                 <div class="rail-footer">
                     <button class="btn btn-generate" id="btn-generate" onclick="generateQuestion()">生成题目</button>

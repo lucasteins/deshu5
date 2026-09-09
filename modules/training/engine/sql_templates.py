@@ -12,6 +12,7 @@ import re
 from typing import Dict, List, Optional
 
 from core.database import DatabaseManager
+from modules.training.engine.sql_sanitize import SqlSanitizer
 
 # P2：模板元数据已入库（sql_knowledge 模板行）；match 时尊重 enabled
 # （表缺失/异常/空表返回 None = 全部启用，行为与入库前一致）
@@ -441,24 +442,15 @@ class SQLTemplateMatcher:
 
     @staticmethod
     def _normalize_for_dialect(sql: str) -> str:
-        """骨架以 strftime 风格存储（金标快照侧挖掘）；执行前统一转为 MySQL DATE_FORMAT。
-        （与 sql_generator._normalize_sql_dialect 同口径，此处独立一份避免反向依赖）"""
-        def _replace(match):
-            return f"DATE_FORMAT({match.group(2).strip()}, '{match.group(1)}')"
-        return re.sub(r"strftime\s*\(\s*['\"]([^'\"]+)['\"]\s*,\s*([^)]+)\s*\)",
-                      _replace, sql, flags=re.IGNORECASE)
+        """骨架以 strftime 风格存储（金标快照侧挖掘）；执行前统一转为 MySQL DATE_FORMAT。"""
+        return SqlSanitizer.normalize_sql_dialect(sql)
 
     def _probe_ok(self, sql: str) -> bool:
         """执行校验（LIMIT 1 探测，相当于 _validate_sql 的轻量版）"""
         if not sql or not re.match(r'(?i)^\s*(SELECT|WITH)\b', sql.strip()):
             return False
         try:
-            db = DatabaseManager()
-            test_sql = re.sub(r'\s+LIMIT\s+\d+\s*$', '', sql.rstrip(';').strip(), flags=re.IGNORECASE)
-            test_sql = self._normalize_for_dialect(test_sql) + ' LIMIT 1'
-            with db.connect_business() as conn:
-                conn.execute(test_sql)
-            return True
+            return not SqlSanitizer(db=DatabaseManager()).exec_probe(self._normalize_for_dialect(sql))
         except Exception:
             return False
 

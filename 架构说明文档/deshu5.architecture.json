@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "deshu5 电力营销智能问数系统架构",
+    "locale": "zh-CN",
+    "output": "deshu5-architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1380, 740],
+    "views": [
+      { "id": "ask-path", "label": "智能问数主链路", "focus": ["browser", "spa", "training", "ontology", "core", "llm", "mysql"], "note": "从前端提问，经 RAG 检索、本体知识源（Schema/概念面/码值）与 LLM 生成 SQL，只读执行后 SSE 回推结果。" },
+      { "id": "report-path", "label": "深度分析报告", "focus": ["spa", "report", "training", "ontology", "core", "mysql"], "note": "planner 借本体实体词表分解子问题；executor 复用训练 SQLGenerator 并发取数，由 LLM 拼装 Markdown 报告。" },
+      { "id": "governance-input", "label": "知识与提资入库", "focus": ["spa", "resources", "provision", "mysql"], "note": "9 类治理知识 CRUD 与 xlsx 素材提资，复核后写入治理库。" },
+      { "id": "ontology-cycle", "label": "本体生命周期", "focus": ["spa", "ontology", "training", "mysql"], "note": "快照漂移检测生成提案，前端审批换版；问数知识源可在 ontology / legacy 间热切换。" },
+      { "id": "offline-crawl", "label": "离线数据采集", "focus": ["tools", "mysql", "mgop"], "note": "tools 脚本独立于 Flask 进程，经 Playwright 爬取统计局数据写入暂存库。" }
+    ]
+  },
+  "components": [
+    { "id": "browser", "type": "external", "label": "用户浏览器", "sublabel": "内网用户", "pos": [40, 340], "size": [140, 64] },
+    { "id": "spa", "type": "frontend", "label": "前端 SPA", "sublabel": "9 页签 · REST / SSE", "pos": [250, 340], "size": [150, 64] },
+    { "id": "report", "type": "backend", "label": "深度分析报告", "sublabel": "计划 / 执行 / 成文", "pos": [560, 80], "size": [170, 64] },
+    { "id": "resources", "type": "backend", "label": "数据资源", "sublabel": "9 类知识 CRUD", "pos": [560, 195], "size": [170, 64] },
+    { "id": "training", "type": "backend", "label": "训练 / 智能问数", "sublabel": "NL2SQL · 审查循环", "pos": [560, 340], "size": [170, 72] },
+    { "id": "provision", "type": "backend", "label": "素材提资", "sublabel": "xlsx → 复核入库", "pos": [560, 485], "size": [170, 64] },
+    { "id": "ontology", "type": "backend", "label": "本体服务", "sublabel": "快照 · 漂移 · 换版", "pos": [560, 600], "size": [170, 64] },
+    { "id": "core", "type": "backend", "label": "core 公共底座", "sublabel": "RAG · Schema · sql_exec", "pos": [840, 340], "size": [170, 64] },
+    { "id": "mysql", "type": "database", "label": "MySQL 四库底座", "sublabel": "业务/治理/日志/本体", "pos": [1170, 340], "size": [180, 80] },
+    { "id": "llm", "type": "external", "label": "LLM API", "sublabel": "Kimi / DeepSeek", "pos": [1170, 100], "size": [180, 64] },
+    { "id": "tools", "type": "backend", "label": "tools 离线脚本", "sublabel": "爬虫 · 导入 · 同步", "pos": [1170, 500], "size": [180, 72] },
+    { "id": "mgop", "type": "external", "label": "浙江政务 mgop 网关", "sublabel": "统计局月度卡片", "pos": [1170, 650], "size": [180, 64] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Flask 单进程 0.0.0.0:5000（蓝图 × 7 · 共享 core 单例）", "wraps": ["report", "resources", "training", "provision", "ontology", "core"] },
+    { "kind": "security-group", "label": "本机 / 内网受信部署（无认证鉴权）", "wraps": ["spa", "report", "resources", "training", "provision", "ontology", "core", "mysql", "tools"], "pad": 24 }
+  ],
+  "connections": [
+    { "id": "open-page", "from": "browser", "to": "spa", "label": "HTTP :5000", "variant": "emphasis" },
+    { "id": "ask-stream", "from": "spa", "to": "training", "label": "问数 · SSE", "variant": "emphasis", "labelAt": [435, 448] },
+    { "id": "report-sse", "from": "spa", "to": "report", "label": "报告 · SSE", "labelAt": [435, 168] },
+    { "id": "resource-crud", "from": "spa", "to": "resources", "label": "知识 CRUD", "variant": "dashed", "labelAt": [435, 300] },
+    { "id": "provision-sse", "from": "spa", "to": "provision", "label": "提资 · SSE", "variant": "dashed", "labelAt": [435, 560] },
+    { "id": "ontology-approve", "from": "spa", "to": "ontology", "label": "本体审批", "variant": "dashed", "labelAt": [435, 588] },
+    { "id": "gen-pipeline", "from": "training", "to": "core", "label": "RAG · 表定位 · Prompt · 审查", "variant": "emphasis", "labelAt": [673, 295] },
+    { "id": "knowledge-source", "from": "ontology", "to": "training", "label": "默认知识源", "fromSide": "right", "toSide": "right", "labelAt": [800, 500] },
+    { "id": "report-reuse", "from": "report", "to": "training", "label": "复用问数引擎", "fromSide": "right", "toSide": "right", "labelAt": [754, 273] },
+    { "id": "llm-call", "from": "core", "to": "llm", "label": "OpenAI 兼容 /chat/completions", "variant": "security", "fromSide": "top", "toSide": "left" },
+    { "id": "sql-exec", "from": "core", "to": "mysql", "label": "pymysql · 只读 SELECT", "variant": "emphasis" },
+    { "id": "tools-write", "from": "tools", "to": "mysql", "label": "爬取/导入/同步 写暂存库", "variant": "dashed" },
+    { "id": "crawl-mgop", "from": "tools", "to": "mgop", "label": "Playwright · HTTPS", "variant": "dashed", "labelAt": [1260, 611] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "四库底座（MySQL）", "items": ["业务库：35+ 营销共享层表与 ADS 统计窄表，SQL 只读执行目标", "治理库：qa_pairs / 错题 / 码值 / sql_knowledge / 报告模板", "日志库 generation_logs 与本体库 7 表（版本 + 变更提案）", "生产 marketing_* 与暂存 database01* 双档位热切换"] },
+    { "dot": "rose", "title": "安全边界", "items": ["应用无认证鉴权，绑定 0.0.0.0，仅适合内网受信部署", "sql_exec 白名单：仅 SELECT/WITH、禁写关键词、自动 LIMIT 50", "LLM 出网携带 Schema 上下文与数据分布统计（数据出域点）", "报告执行器复用训练模块 SQLGenerator，命中标准问答对走 SQL 适配"] }
+  ]
+}

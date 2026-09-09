@@ -127,7 +127,8 @@ class QuestionGenerator:
         for q in self.existing_questions:
             self._register_question(q)
         # 数据资源资产（工作流驱动出题：选业务分类→找表→找字段→找码值）
-        self._domain_of_table, self._domain_names = self._load_domain_map()  # 表→二级业务域；域码→域中文名
+        self._domain_of_table, self._domain_names, self._domain_parent = self._load_domain_map()  # 表→二级域；域码→中文名；二级域→一级域
+        self._l2_codes = set(self._domain_parent.keys())  # 全部二级域码（含无表域，用于区分一/二级码）
         self._domain_coverage = self._load_domain_coverage()  # 二级业务域 -> 已出题数（qa_pairs.domain_l2）
         self._neighbors = self._load_neighbors()   # 表 -> 关联表集合（物理外键 ∪ 治理关系文档）
         # 无域标注表归入虚拟"未分类"域，参与覆盖感知调度（否则这些表永远无法成为锚点）
@@ -169,19 +170,21 @@ class QuestionGenerator:
 
     # ---------- 数据资源资产加载（业务分类/码值库/关系图谱） ----------
     def _load_domain_map(self):
-        """表 → 二级业务域映射 + 域码 → 域中文名（来源：schema_table_docs.domain_l2 × business_domains）。"""
-        dmap, dnames = {}, {}
+        """表 → 二级业务域映射 + 域码 → 域中文名 + 二级域 → 一级域（来源：schema_table_docs.domain_l2 × business_domains）。"""
+        dmap, dnames, dparent = {}, {}, {}
         try:
             with self.db.connect_governance() as conn:
                 for t, l2 in conn.execute(
                         'SELECT table_name, domain_l2 FROM schema_table_docs WHERE domain_l2 IS NOT NULL'):
                     dmap[t] = l2
-                for code, name in conn.execute(
-                        "SELECT domain_code, domain_name FROM business_domains WHERE level IN (1, 2)"):
+                for code, name, parent in conn.execute(
+                        "SELECT domain_code, domain_name, parent_code FROM business_domains WHERE level IN (1, 2)"):
                     dnames[code] = name
+                    if parent:
+                        dparent[code] = parent
         except Exception as e:
             print(f"[WARN] 加载业务分类映射失败（退回无域引导出题）: {e}")
-        return dmap, dnames
+        return dmap, dnames, dparent
 
     def _load_domain_coverage(self) -> Dict[str, int]:
         """二级业务域已出题数（来源：qa_pairs.domain_l2）。"""
@@ -299,11 +302,15 @@ class QuestionGenerator:
             if len(pool) < 2:
                 pool = list(names)
         elif domain:
-            pool = [t for t in names if self._domain_of_table.get(t) == domain]
-            if len(pool) < 3:
-                # 域内表太少：优先用该域表的关联表补足（保持业务主题连贯），再退回全域
-                related = {n for t in pool for n in self._neighbors.get(t, ())}
-                pool = pool + sorted(related - set(pool))
+            if domain in self._l2_codes:
+                # 二级域：候选池 = 该二级域标注的表
+                pool = [t for t in names if self._domain_of_table.get(t) == domain]
+            else:
+                # 一级域：候选池 = 该一级域下所有二级域的表
+                pool = [t for t in names
+                        if self._domain_parent.get(self._domain_of_table.get(t, '')) == domain]
+            # 指定域时锚点严格限制域内（域小则少抽锚点，锚点数随池自适应），
+            # 不补域外关联表，避免题目跑题；仅极端情况（域内不足 2 表）退回全域
             if len(pool) < 2:
                 pool = list(names)
         else:
@@ -311,10 +318,12 @@ class QuestionGenerator:
         facts = [t for t in pool if t.startswith(_FACT_PREFIXES)]
         dims = [t for t in pool if not t.startswith(_FACT_PREFIXES)]
         if not facts:
-            facts = list(pool) if domain == _UNCLASSIFIED_DOMAIN \
+            facts = list(pool) if domain \
                 else [t for t in names if t.startswith(_FACT_PREFIXES)]
         if not dims:
-            dims = [t for t in names if not t.startswith(_FACT_PREFIXES)] or list(pool)
+            # 指定一/二级域且域内无维度表：锚点允许只有事实表（不外借全域维度）
+            if not (domain and domain != _UNCLASSIFIED_DOMAIN):
+                dims = [t for t in names if not t.startswith(_FACT_PREFIXES)] or list(pool)
         n_facts = random.choice([1, 1, 2])
         anchors = self._weighted_sample(facts, k=min(n_facts, len(facts)))
         n_total = random.randint(2, 4)
@@ -322,6 +331,13 @@ class QuestionGenerator:
         # 关系扩展：进阶/挑战题追加 1 张与锚点有合法 JOIN 路径的关联表
         if diff in ('进阶题', '挑战题') and self._neighbors:
             cand = sorted({n for a in anchors for n in self._neighbors.get(a, ()) if n not in anchors})
+            if domain and domain != _UNCLASSIFIED_DOMAIN:
+                # 指定一/二级域：扩展表也须落在域内，避免题目跑题
+                if domain in self._l2_codes:
+                    cand = [t for t in cand if self._domain_of_table.get(t) == domain]
+                else:
+                    cand = [t for t in cand
+                            if self._domain_parent.get(self._domain_of_table.get(t, '')) == domain]
             if cand:
                 anchors += self._weighted_sample(cand, k=1)
         return anchors
@@ -488,6 +504,58 @@ class QuestionGenerator:
         )[0]
         return random.choice(DIFFICULTY_TYPE_MAP[diff]), diff
 
+    def list_domains(self) -> Dict:
+        """训练模式业务域层级列表（数据源 business_domains）：一级域 + 二级域（含父级编码与表数）。
+
+        仅返回有表（可出题）的域；无域标注表归入虚拟"未分类"域，挂为一级域（无二级）。"""
+        l2_tables: Dict[str, int] = {}
+        for l2 in self._domain_of_table.values():
+            l2_tables[l2] = l2_tables.get(l2, 0) + 1
+        l1_tables: Dict[str, int] = {}
+        for l2, cnt in l2_tables.items():
+            l1 = self._domain_parent.get(l2)
+            if l1:
+                l1_tables[l1] = l1_tables.get(l1, 0) + cnt
+        l1_items = [
+            {'code': code, 'name': self._domain_names.get(code, code), 'table_count': cnt}
+            for code, cnt in sorted(l1_tables.items(), key=lambda kv: -kv[1])
+        ]
+        l2_items = [
+            {'code': code, 'name': self._domain_names.get(code, code),
+             'parent': self._domain_parent.get(code), 'table_count': cnt}
+            for code, cnt in sorted(l2_tables.items(), key=lambda kv: -kv[1])
+        ]
+        if self._unclassified_tables:
+            l1_items.append({'code': _UNCLASSIFIED_DOMAIN, 'name': '未分类',
+                             'table_count': len(self._unclassified_tables)})
+        return {'l1': l1_items, 'l2': l2_items}
+
+    def resolve_domain_l2(self, domain: Optional[str]) -> Optional[List[str]]:
+        """把一级/二级域码解析为其覆盖的二级域码列表（历史题库过滤用）。
+
+        返回 None 表示不限（未分类域走 IS NULL，不在此展开）；空列表表示该域下无任何二级域。"""
+        if not domain or domain == _UNCLASSIFIED_DOMAIN:
+            return None
+        if domain in self._domain_parent:  # 二级域
+            return [domain]
+        return sorted(l2 for l2, l1 in self._domain_parent.items() if l1 == domain)
+
+    def _domain_match(self, cand_domain: Optional[str], domain: str) -> bool:
+        """候选题所属域是否落在指定域内（一级域包含其下全部二级域）。"""
+        if cand_domain == domain:
+            return True
+        if cand_domain and self._domain_parent.get(cand_domain) == domain:
+            return True
+        return False
+
+    def _actual_domain(self, anchors: List[str]) -> Optional[str]:
+        """锚点表实际所属二级域（取首个有域标注的锚点表；用于一级域出题的域归一化）。"""
+        for t in anchors:
+            l2 = self._domain_of_table.get(t)
+            if l2:
+                return l2
+        return None
+
     def _call_llm(self, prompt: str) -> str:
         """出题专用 LLM 调用：Provider 由 config.QGEN_PROVIDER 指定（默认 deepseek）。
 
@@ -506,18 +574,22 @@ class QuestionGenerator:
         resp.raise_for_status()
         return resp.json()['choices'][0]['message']['content']
 
-    def _generate_batch(self, difficulty: Optional[str], batch_size: int) -> List[Dict]:
+    def _generate_batch(self, difficulty: Optional[str], batch_size: int,
+                         domain: Optional[str] = None) -> List[Dict]:
         """一次 LLM 调用批量产出 batch_size 道题。
 
-        工作流（每题）：选业务分类（覆盖感知）→ 找表（域内覆盖抽样 + 关系图谱扩展）
+        工作流（每题）：选业务分类（覆盖感知；外部指定 domain 时固定该域出题）
+        → 找表（域内覆盖抽样 + 关系图谱扩展）
         → 找字段（优先级截断摘要）→ 找码值（码值库真实枚举，含存储形态）。"""
         tasks = []
         for _ in range(batch_size):
-            domain = self._pick_domain()
+            task_domain = domain if domain else self._pick_domain()
             qtype, diff = self._pick_question_type(difficulty)
-            anchors = self._pick_anchor_tables(domain, diff)
+            anchors = self._pick_anchor_tables(task_domain, diff)
             tasks.append({
-                'domain': domain,
+                'domain': task_domain,
+                # 题目实际所属二级域（一级域出题时归一化为锚点表所属域，入库 domain_l2 用）
+                'result_domain': self._actual_domain(anchors) or task_domain,
                 'anchors': anchors,
                 'qtype': qtype,
                 'diff': diff,
@@ -584,20 +656,28 @@ class QuestionGenerator:
                 'tags': [tasks[min(i, len(tasks) - 1)]['qtype']],
                 'tables_involved': tables or fallback_anchors,
                 'sampled_values': tasks[min(i, len(tasks) - 1)]['samples'],
-                'domain': tasks[min(i, len(tasks) - 1)]['domain'],
+                'domain': tasks[min(i, len(tasks) - 1)]['result_domain'],
             })
         return accepted
 
     # ---------- 主入口 ----------
-    def generate(self, difficulty: Optional[str] = None, max_retries: int = 3) -> Optional[Dict]:
-        """生成一道自然语言业务题。队列优先（批量出题的余量），失败重试后返回 None。"""
+    def generate(self, difficulty: Optional[str] = None, domain: Optional[str] = None,
+                 max_retries: int = 3) -> Optional[Dict]:
+        """生成一道自然语言业务题。队列优先（批量出题的余量；指定业务域时只弹出该域候选），
+        失败重试后返回 None。"""
         if self._queue:
-            cand = self._queue.pop(0)
-            self._register_question(cand['question'])  # 占位防重（同批/后续批次不再复用）
-            return cand
+            idx = 0
+            if domain:
+                # 一级域匹配其下任意二级域候选；二级域/未分类域精确匹配
+                idx = next((i for i, c in enumerate(self._queue)
+                            if self._domain_match(c.get('domain'), domain)), None)
+            if idx is not None:
+                cand = self._queue.pop(idx)
+                self._register_question(cand['question'])  # 占位防重（同批/后续批次不再复用）
+                return cand
         for _ in range(max_retries):
             try:
-                accepted = self._generate_batch(difficulty, BATCH_SIZE)
+                accepted = self._generate_batch(difficulty, BATCH_SIZE, domain=domain)
             except Exception as e:
                 print(f"[WARN] LLM 批量出题失败: {e}")
                 continue

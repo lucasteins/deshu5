@@ -5,6 +5,7 @@ import requests
 from typing import Dict, List, Optional, Tuple
 import config
 from core.database import DatabaseManager
+from modules.training.engine.sql_sanitize import SqlSanitizer
 
 
 def _alias_safe(comment: str) -> str:
@@ -243,13 +244,8 @@ class SQLAliasTranslator:
         return sql
     
     def _extract_tables_from_sql(self, sql: str) -> List[str]:
-        """从 SQL 中提取表名（FROM 和 JOIN 后的表名）"""
-        tables = set()
-        for match in re.finditer(r'FROM\s+([a-zA-Z_][a-zA-Z0-9_]*)', sql, re.IGNORECASE):
-            tables.add(match.group(1))
-        for match in re.finditer(r'JOIN\s+([a-zA-Z_][a-zA-Z0-9_]*)', sql, re.IGNORECASE):
-            tables.add(match.group(1))
-        return sorted(tables)
+        """从 SQL 中提取表名（FROM/JOIN；CTE 别名不算真实表，委托 SqlSanitizer）"""
+        return SqlSanitizer.extract_tables_from_sql(sql)
     
     def _guess_field_alias(self, field_name: str) -> str:
         """

@@ -145,6 +145,7 @@ def _perform_generate_sql(user_question, no_reference=False, request_mode='qa', 
                         session_id=session_id,
                         business_question=user_question,
                         generated_sql=failed_sql,
+                        generation_mode=gen_result.get('generation_mode'),
                         retrieved_pairs=json.dumps(retrieved_pairs, ensure_ascii=False),
                         review_result=json.dumps(review_result, ensure_ascii=False),
                         execution_result=json.dumps(
@@ -209,6 +210,7 @@ def _perform_generate_sql(user_question, no_reference=False, request_mode='qa', 
                     session_id=session_id,
                     business_question=user_question,
                     generated_sql=final_sql,
+                    generation_mode=gen_result.get('generation_mode'),
                     retrieved_pairs=json.dumps(retrieved_pairs, ensure_ascii=False),
                     review_result=json.dumps(review_result, ensure_ascii=False),
                     execution_result=json.dumps(pure_result, ensure_ascii=False),
@@ -271,18 +273,23 @@ def _perform_generate_sql(user_question, no_reference=False, request_mode='qa', 
                 'post_audit': bool(post_execution_audit)})
         phase_times['total'] = int((time.time() - start_time) * 1000)
 
-        # 记录生成日志（记录纯代码SQL，不记录带别名SQL）
-        log_id = _record_generation(
-            session_id=session_id,
-            business_question=user_question,
-            generated_sql=final_sql,
-            retrieved_pairs=json.dumps(retrieved_pairs, ensure_ascii=False),
-            review_result=json.dumps(review_result, ensure_ascii=False),
-            execution_result=json.dumps(execution_result, ensure_ascii=False),
-            post_execution_audit=post_execution_audit,
-            attempts=attempts,
-            duration_ms=phase_times['total']
-        )
+        # 记录生成日志（记录纯代码SQL，不记录带别名SQL）；日志写入失败不阻断主流程
+        log_id = None
+        try:
+            log_id = _record_generation(
+                session_id=session_id,
+                business_question=user_question,
+                generated_sql=final_sql,
+                generation_mode=gen_result.get('generation_mode'),
+                retrieved_pairs=json.dumps(retrieved_pairs, ensure_ascii=False),
+                review_result=json.dumps(review_result, ensure_ascii=False),
+                execution_result=json.dumps(execution_result, ensure_ascii=False),
+                post_execution_audit=post_execution_audit,
+                attempts=attempts,
+                duration_ms=phase_times['total']
+            )
+        except Exception as log_err:
+            print(f"[WARN] 生成日志写入失败: {log_err}")
 
         # 缓存会话
         session_cache[session_id] = {
@@ -391,14 +398,16 @@ def _record_generation(**kwargs) -> int:
         cursor = conn.execute('''
             INSERT INTO generation_logs (
                 session_id, user_question, generated_sql,
+                generation_mode,
                 rag_pairs_count, review_passed, review_issues,
                 execution_status, row_count, post_execution_audit,
                 attempts, latency_ms, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             kwargs['session_id'],
             kwargs['business_question'],
             kwargs['generated_sql'],
+            kwargs.get('generation_mode'),
             rag_count,
             review_passed,
             review_issues,
@@ -487,6 +496,17 @@ _USABLE_QA_FILTER = """
 """.strip()
 
 
+@bp.route('/api/business-domains')
+def get_business_domains():
+    """训练模式：出题业务域层级列表（一级/二级，来源于数据资源 business_domains 治理资产）"""
+    try:
+        qgen = _get_question_generator()
+        items = qgen.list_domains()
+        return jsonify({'success': True, 'items': items})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/api/next-question', methods=['GET'])
 def next_question():
     """
@@ -495,12 +515,16 @@ def next_question():
     - 只返回自然语言业务题，不生成、不执行 SQL。
     - source=generated 强制使用智能生成题；source=qa 强制使用历史题库；默认 auto。
     - 新生成题目默认 is_usable=0，需经 /api/evaluate-question 评价为"合理"后才进入 RAG/去重池。
+    - domain 指定出题业务域（二级域码或 __unclassified__）；缺省=全域覆盖感知轮转。
     """
+    from modules.training.engine.question_generator import _UNCLASSIFIED_DOMAIN
+
     session_id = str(uuid.uuid4())
     start_time = time.time()
     phase_times = {}
     source = request.args.get('source', 'auto')  # auto | generated | qa
     difficulty = request.args.get('difficulty')  # 基础题 | 进阶题 | 挑战题 | None
+    domain = (request.args.get('domain') or '').strip() or None  # 业务域码 | __unclassified__ | None
 
     qa_id = None
     question = None
@@ -513,7 +537,7 @@ def next_question():
             try:
                 t_qgen_start = time.time()
                 qgen = _get_question_generator()
-                candidate = qgen.generate(difficulty=difficulty)
+                candidate = qgen.generate(difficulty=difficulty, domain=domain)
                 if candidate:
                     # 保存为待评价题目（is_usable=0）
                     qa_id = qgen.save_to_qa_pairs(candidate)
@@ -521,6 +545,7 @@ def next_question():
                     difficulty = candidate['difficulty']
                     generated = True
                     question_source = 'generated'
+                    domain = candidate.get('domain')
                 phase_times['qgen'] = int((time.time() - t_qgen_start) * 1000)
             except Exception as e:
                 print(f"[WARN] 智能出题失败: {e}")
@@ -529,23 +554,37 @@ def next_question():
             if source == 'generated' and not generated:
                 return jsonify({'success': False, 'error': '未能生成新题目，请稍后重试'}), 503
 
-        # ---------- 2. 回退到历史题库 ----------
+        # ---------- 2. 回退到历史题库（指定业务域时同步收敛到该域） ----------
         if not generated:
+            domain_cond, domain_params = '', []
+            if domain == _UNCLASSIFIED_DOMAIN:
+                domain_cond = ' AND domain_l2 IS NULL'
+            elif domain:
+                # 一级域码展开为其下二级码列表（business_domains 层级），二级码直接匹配
+                l2_list = _get_question_generator().resolve_domain_l2(domain)
+                if l2_list:
+                    marks = ','.join('?' * len(l2_list))
+                    domain_cond = f' AND domain_l2 IN ({marks})'
+                    domain_params = l2_list
+                else:
+                    return jsonify({'success': False, 'error': '该业务域暂无可用题目'}), 404
             with db_manager.connect_governance() as conn:
                 cursor = conn.execute(f'''
-                    SELECT id, question, difficulty
+                    SELECT id, question, difficulty, domain_l2
                     FROM qa_pairs
                     WHERE standard_sql IS NOT NULL AND standard_sql != ''
-                      AND {_USABLE_QA_FILTER}
+                      AND {_USABLE_QA_FILTER}{domain_cond}
                     ORDER BY RAND() LIMIT 1
-                ''')
+                ''', tuple(domain_params))
                 row = cursor.fetchone()
 
                 if not row:
-                    return jsonify({'success': False, 'error': '暂无可用题目'}), 404
+                    return jsonify({'success': False,
+                                    'error': '该业务域暂无可用题目' if domain else '暂无可用题目'}), 404
 
-                qa_id, question, difficulty = row
+                qa_id, question, difficulty, row_domain = row
                 question_source = 'qa'
+                domain = row_domain or domain  # 回显历史题实际所属业务域
 
         phase_times['total'] = int((time.time() - start_time) * 1000)
 
@@ -569,6 +608,7 @@ def next_question():
             'qa_id': qa_id,
             'question': question,
             'difficulty': difficulty or '进阶题',
+            'domain': domain or None,
             'source': question_source,
             'generated': generated,
             'timing': phase_times

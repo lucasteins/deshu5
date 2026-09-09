@@ -166,13 +166,16 @@ async function loadReview(runId) {
     filterReviewRows();
 }
 
-/** 优先级分组区块：高优先级逐条人工确认（每批最多显示 cap 条）；中/低支持批量同意 */
+/** 优先级分组区块：高优先级逐条人工确认（每批最多显示 cap 条）；中/低支持批量同意；
+ * 所有分组支持批量不同意（否决=保留库内现状，不改数据，无优先级限制） */
 function pvRenderPriSection(pri, items, cap) {
     if (!items.length) return '';
     const cls = {'高': 'pv-pri-high', '中': 'pv-pri-mid', '低': 'pv-pri-low'}[pri];
     const shown = cap ? items.slice(0, cap) : items;
-    const batchBtn = (pri === '高') ? '' :
+    const agreeBtn = (pri === '高') ? '' :
         ` <button class="btn btn-primary btn-sm" onclick="batchConfirm('${pri}')">批量同意本节（${items.length} 条）</button>`;
+    const batchBtn = agreeBtn +
+        ` <button class="btn btn-secondary btn-sm" onclick="batchReject('${pri}')">批量不同意（保留现状，${items.length} 条）</button>`;
     const capHint = (cap && items.length > cap) ?
         ` <span class="hint">共 ${items.length} 条，本批显示前 ${cap} 条，处理后可刷新换下一批</span>` : '';
     const rows = shown.map(it => `<tr id="pv-rev-${it.id}">
@@ -181,7 +184,8 @@ function pvRenderPriSection(pri, items, cap) {
         <td>${pvEsc(it.field_name)}</td>
         <td class="hint">${pvEsc(it.priority_reason || '')}${(it.source_ref || '').startsWith('冲突') ? '<br>' + pvEsc(it.source_ref) : ''}</td>
         <td><input class="pv-value-input" id="pv-val-${it.id}" value="${pvEsc(it.field_value || '')}"></td>
-        <td><button class="btn btn-primary btn-sm" onclick="confirmProv(${it.id})">确认</button></td>
+        <td><button class="btn btn-primary btn-sm" onclick="confirmProv(${it.id})">同意变更</button>
+            <button class="btn btn-secondary btn-sm" onclick="rejectProv(${it.id})">不同意变更</button></td>
     </tr>`).join('');
     return `<div class="pv-pri-section">
         <h4><span class="pv-pri ${cls}">${pri}优先级</span>${items.length} 条${batchBtn}${capHint}</h4>
@@ -203,6 +207,23 @@ async function batchConfirm(pri) {
     if (!data.success) { alert('批量确认失败：' + (data.error || resp.status)); return; }
     alert(`已确认 ${data.confirmed} 条` +
         (data.refused && data.refused.length ? `；服务端拒绝 ${data.refused.length} 条（高优先级需逐条确认）` : '') +
+        (data.failed && data.failed.length ? `；失败 ${data.failed.length} 条` : ''));
+    await initProvisionPage();
+}
+
+/** 批量不同意一个优先级分组：保留库内现状，不改任何数据（安全操作，高优先级也允许） */
+async function batchReject(pri) {
+    const ids = pvReviewItems.filter(it => it.priority === pri).map(it => it.id);
+    if (!ids.length) return;
+    if (!confirm(`确认批量不同意「${pri}」优先级的 ${ids.length} 条变更？\n库内将保留现状，不做任何改动。`)) return;
+    const resp = await fetch('/api/provision/review/batch-reject', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids})
+    });
+    const data = await resp.json();
+    if (!data.success) { alert('批量否决失败：' + (data.error || resp.status)); return; }
+    alert(`已否决 ${data.rejected} 条（库内保留现状）` +
+        (data.skipped ? `；跳过 ${data.skipped} 条（已处理过）` : '') +
         (data.failed && data.failed.length ? `；失败 ${data.failed.length} 条` : ''));
     await initProvisionPage();
 }
@@ -256,6 +277,18 @@ async function confirmProv(provId) {
     if (tr) {
         tr.classList.add('pv-row-confirmed');
         tr.querySelector('td:last-child').innerHTML = '<span class="pv-ok">confirmed</span>';
+    }
+}
+
+/** 不同意变更：库内保留现状，该行标记 rejected 并淡出 */
+async function rejectProv(provId) {
+    const resp = await fetch(`/api/provision/review/${provId}/reject`, {method: 'POST'});
+    const data = await resp.json();
+    if (!data.success) { alert('否决失败：' + (data.error || resp.status)); return; }
+    const tr = document.getElementById(`pv-rev-${provId}`);
+    if (tr) {
+        tr.classList.add('pv-row-rejected');
+        tr.querySelector('td:last-child').innerHTML = '<span class="hint">rejected（保留现状）</span>';
     }
 }
 

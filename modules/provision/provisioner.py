@@ -321,6 +321,12 @@ def validate(parsed: dict, db=None) -> dict:
                 if v in (None, ''):
                     _issue(b, r, 'fail', f'必填字段[{label}]为空')
                     bad = True
+            # 长度须落在 code_values 列宽内，超限提前 fail（否则执行期 DataError 中断整个 run）
+            for label, v, lim in (('code_name', cn, 64), ('中文名', ccn, 255),
+                                  ('数据类型', dt, 32), ('描述', desc, 255)):
+                if v not in (None, '') and len(str(v)) > lim:
+                    _issue(b, r, 'fail', f'字段[{label}]长度 {len(str(v))} 超过列宽 {lim}：{str(v)[:40]}')
+                    bad = True
             if dom and dom not in l1_map:
                 _issue(b, r, 'warn', f'所属域[{dom}]不在 10 个一级业务域')
             if cn:
@@ -351,6 +357,11 @@ def validate(parsed: dict, db=None) -> dict:
             for label, v in (('code_name', cn), ('item_code', ic), ('item_name', inm)):
                 if v in (None, ''):
                     _issue(b, r, 'fail', f'必填字段[{label}]为空')
+                    bad = True
+            # 长度须落在 code_value_items 列宽内，超限提前 fail（否则执行期 DataError 中断整个 run）
+            for label, v, lim in (('code_name', cn, 64), ('item_code', ic, 64), ('item_name', inm, 255)):
+                if v not in (None, '') and len(str(v)) > lim:
+                    _issue(b, r, 'fail', f'字段[{label}]长度 {len(str(v))} 超过列宽 {lim}：{str(v)[:40]}')
                     bad = True
             if cn and s3d_names and str(cn) not in s3d_names:
                 _issue(b, r, 'fail', f'code_name[{cn}]不在 S3-码值维度（明细须⊆维度）')
@@ -626,7 +637,7 @@ def convert_run(run_id: str, parsed: dict, validation: dict,
         _emit('convert', f'S2 完成 {stats["converted"].get("S2", 0)} 行')
 
         # ---- S2b → schema_column_docs（upsert by table_name+column_name）----
-        # 字段级元数据：与 S2（表级）互补。doc_text 作富化字段直接覆盖，
+        # 字段级元数据：与 S2（表级）互补。以库内已有为准：doc_text 仅在库内为空时回填富化，
         # 仅 column_comment/data_type/is_pk 三项结构字段差异进冲突复核（避免 4094 行假冲突）
         for rec in parsed.get('S2B', {}).get('rows', []):
             r = rec['src_row']
@@ -652,8 +663,9 @@ def convert_run(run_id: str, parsed: dict, validation: dict,
                 stats['skipped']['S2B_conflict'] = stats['skipped'].get('S2B_conflict', 0) + 1
                 continue
             if outcome == 'skip':
-                # 结构字段一致但 doc_text 富化差异：覆盖 doc_text，记 direct 溯源
-                if (doctext or '') and doctext != _existing_doc_text(conn, tname, colname):
+                # 结构字段一致时以库内为准：doc_text 仅在库内为空时回填（富化），
+                # 库内已有 doc_text 一律保留，不被模板覆盖
+                if (doctext or '') and not (_existing_doc_text(conn, tname, colname) or ''):
                     conn.execute(
                         'UPDATE schema_column_docs SET doc_text = ? '
                         'WHERE table_name = ? AND column_name = ?',
@@ -1325,6 +1337,45 @@ def confirm_provenance(prov_id: int, field_value, db=None) -> dict:
         r = cursor.fetchone()
         return {'id': r[0], 'target_table': r[1], 'target_key': r[2], 'field_name': r[3],
                 'field_value': r[4], 'source_kind': r[5], 'review_status': r[6]}
+
+
+def reject_provenance(prov_id: int, db=None) -> dict:
+    """复核否决：不同意变更，保留库内现状。不回填目标表，
+    仅 review_status→rejected、reviewed_at=now。仅 pending 状态可否决。"""
+    db = db or DatabaseManager()
+    with db.connect_governance() as conn:
+        row = conn.execute(
+            'SELECT id, review_status FROM ingest_provenance WHERE id = ?',
+            (int(prov_id),)).fetchone()
+        if not row:
+            raise LookupError(f'溯源记录不存在: {prov_id}')
+        if row[1] != 'pending':
+            raise ValueError(f'仅 pending 状态可否决（当前为 {row[1]}）')
+        conn.execute(
+            "UPDATE ingest_provenance SET review_status = 'rejected', reviewed_at = ? WHERE id = ?",
+            (_now(), int(prov_id)))
+        conn.commit()
+        r = conn.execute(
+            'SELECT id, target_table, target_key, field_name, field_value, source_kind, review_status'
+            ' FROM ingest_provenance WHERE id = ?', (int(prov_id),)).fetchone()
+        return {'id': r[0], 'target_table': r[1], 'target_key': r[2], 'field_name': r[3],
+                'field_value': r[4], 'source_kind': r[5], 'review_status': r[6]}
+
+
+def batch_reject(prov_ids, db=None) -> dict:
+    """批量复核否决：不同意变更、保留库内现状。否决不改任何数据，无优先级限制
+    （与 batch_confirm 对称：确认有数据风险需分级，否决是安全操作）。
+    返回 {'rejected': n, 'skipped': n, 'failed': [(id, 错误)]}。"""
+    rejected, skipped, failed = 0, 0, []
+    for pid in prov_ids:
+        try:
+            reject_provenance(int(pid), db=db)
+            rejected += 1
+        except (LookupError, ValueError):
+            skipped += 1  # 不存在或非 pending（已确认/已否决）
+        except Exception as e:
+            failed.append((int(pid), str(e)[:100]))
+    return {'rejected': rejected, 'skipped': skipped, 'failed': failed}
 
 
 def finish_run(run_id: str, db=None) -> dict:

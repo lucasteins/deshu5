@@ -1018,15 +1018,18 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .stats-tab { display: none; }
 .stats-tab.active { display: block; }
 
-/* ================= 单列主区 + 悬浮流程面板 ================= */
+/* ================= 主区 + 右侧流程栏（宽度与左侧菜单一致） ================= */
 .single-main { max-width: 880px; margin: 0 auto; }
+#mode-training.active, #mode-qa.active { display: flex; align-items: flex-start; gap: 24px; }
+#mode-training .single-main, #mode-qa .single-main { flex: 1; min-width: 0; max-width: none; margin: 0; }
 .float-wrap {
-    position: fixed;
-    top: 132px;
-    right: 22px;
-    width: 252px;
+    order: 2;
+    flex-shrink: 0;
+    width: var(--sidebar-w);
+    position: sticky;
+    top: 24px;
     z-index: 150;
-    max-height: calc(100vh - 152px);
+    max-height: calc(100vh - 48px);
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -1526,6 +1529,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .pv-fail { color: var(--neg); }
 .pv-value-input { width: 100%; min-width: 180px; font-size: 12px; padding: 4px 8px; }
 .pv-row-confirmed { opacity: 0.65; background: rgba(70, 208, 154, 0.07); border-color: rgba(70, 208, 154, 0.25); }
+.pv-row-rejected { opacity: 0.55; background: rgba(240, 109, 109, 0.06); border-color: rgba(240, 109, 109, 0.22); }
 .pv-pri {
     display: inline-block;
     padding: 2px 11px;
@@ -1657,15 +1661,6 @@ input[type="checkbox"] { accent-color: var(--accent); }
 /* ================= 响应式 ================= */
 /* 1660px 以下悬浮面板改为静态并排，避免与 880px 主卡重叠 */
 @media (max-width: 1659px) {
-    .float-wrap {
-        position: static;
-        width: auto;
-        max-height: none;
-        flex-direction: row;
-        align-items: flex-start;
-        margin-bottom: 18px;
-    }
-    .float-wrap .flow-rail, .float-wrap .context-panel { flex: 1; }
     .single-main { max-width: 100%; }
 }
 @media (max-width: 900px) {
@@ -1684,7 +1679,8 @@ input[type="checkbox"] { accent-color: var(--accent); }
     .page-header { padding: 20px 18px 16px; }
     .page-header::after { left: 18px; right: 18px; }
     .chart-grid { grid-template-columns: 1fr; }
-    .float-wrap { flex-direction: column; }
+    #mode-training.active, #mode-qa.active { flex-direction: column; }
+    .float-wrap { order: 0; width: 100%; position: static; max-height: none; margin-bottom: 18px; }
     .detail-drawer { width: 100%; }
 }
 

@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadStats();
     loadErrorList();
     loadQALibList();
+    loadBusinessDomains();
 });
 
 // 切换模式
@@ -80,6 +81,86 @@ document.addEventListener('click', () => {
 
 // ==================== 训练模式 ====================
 
+// 业务域层级（一级/二级，来源数据资源 business_domains 治理资产）
+let businessDomains = { l1: [], l2: [] };
+
+async function loadBusinessDomains() {
+    try {
+        const response = await fetch('/api/business-domains');
+        const data = await response.json();
+        if (!data.success) return;
+        const items = data.items || {};
+        businessDomains = { l1: items.l1 || [], l2: items.l2 || [] };
+        renderDomainL1Options();
+        renderDomainL2Options();
+    } catch (e) {
+        console.warn('加载业务域列表失败:', e);
+    }
+}
+
+function renderDomainL1Options() {
+    const sel = document.getElementById('training-domain-l1');
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">全部业务域</option>' + businessDomains.l1.map(d =>
+        `<option value="${d.code}">${d.name}（${d.table_count} 表）</option>`).join('');
+    if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+
+// 二级域下拉跟随一级域联动：一级选"全部业务域"时展示全部二级域
+function renderDomainL2Options() {
+    const sel = document.getElementById('training-domain-l2');
+    if (!sel) return;
+    const l1Sel = document.getElementById('training-domain-l1');
+    const scope = l1Sel ? l1Sel.value : '';
+    const pool = scope ? businessDomains.l2.filter(d => d.parent === scope) : businessDomains.l2;
+    sel.innerHTML = '<option value="">全部二级域</option>' + pool.map(d =>
+        `<option value="${d.code}">${d.name}（${d.table_count} 表）</option>`).join('');
+}
+
+function domainName(code) {
+    if (!code) return null;
+    const d = businessDomains.l2.find(x => x.code === code) ||
+              businessDomains.l1.find(x => x.code === code);
+    return d ? d.name : code;
+}
+
+// badge 文案：二级域显示"一级 · 二级"，一级域/未知码只显示名称
+function domainLabel(code) {
+    if (!code) return '不限';
+    const l2 = businessDomains.l2.find(x => x.code === code);
+    if (l2 && l2.parent) {
+        const l1Name = domainName(l2.parent);
+        if (l1Name) return l1Name + ' · ' + l2.name;
+    }
+    return domainName(code) || code;
+}
+
+// 当前出题业务域：优先二级域，其次一级域，均未选=全部
+function currentDomain() {
+    const l2 = document.getElementById('training-domain-l2');
+    const l1 = document.getElementById('training-domain-l1');
+    if (l2 && l2.value) return l2.value;
+    return (l1 && l1.value) || '';
+}
+
+function onDomainL1Change() {
+    renderDomainL2Options();
+    updateDomainBadge();
+}
+
+// 选择变化即时更新 badge（语义：当前出题范围）；生成题目后由题目实际所属域覆盖
+function updateDomainBadge() {
+    const badge = document.getElementById('domain-badge');
+    if (!badge) return;
+    const l2 = document.getElementById('training-domain-l2');
+    const l1 = document.getElementById('training-domain-l1');
+    let label = '不限';
+    if (l2 && l2.value) label = domainLabel(l2.value);
+    else if (l1 && l1.value) label = domainName(l1.value) || l1.value;
+    badge.textContent = '业务域: ' + label;
+}
+
 async function generateQuestion() {
     const btn = document.getElementById('btn-generate');
     btn.disabled = true;
@@ -88,7 +169,9 @@ async function generateQuestion() {
     resetContextPanel();
 
     try {
-        const response = await fetch('/api/next-question');
+        const domain = currentDomain();
+        const qs = domain ? '?domain=' + encodeURIComponent(domain) : '';
+        const response = await fetch('/api/next-question' + qs);
         const data = await response.json();
 
         if (!data.success) {
@@ -111,6 +194,7 @@ async function generateQuestion() {
         };
 
         document.getElementById('difficulty-badge').textContent = '难度: ' + (data.difficulty || '进阶题');
+        document.getElementById('domain-badge').textContent = '业务域: ' + domainLabel(data.domain);
         document.getElementById('question-text').textContent = data.question;
 
         // 隐藏 SQL/结果/判断按钮，等待评价后生成
