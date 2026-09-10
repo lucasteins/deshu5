@@ -14,6 +14,10 @@
 模板 9 Sheet：S2-管理元数据 / S3-码值维度 / S3-码值明细 / S4-表关联关系 / S5-问答对素材 /
 S6-业务规则（00b-枚举字典、00c-二级业务分类为校验依据，00-填写说明忽略）。
 表头兼容"（必填）/（选填）/✅"标记（匹配时剥离）。
+
+自动建表：执行转换时，S2 清单中当前业务库（db_profile 档位：生产库 marketing_40 /
+暂存库 database01 / 后续新增明细库）尚不存在的表，按 S2b 字段明细 CREATE TABLE
+IF NOT EXISTS（只增不改；表名/列名/数据类型白名单校验后才允许进 DDL）。
 """
 import json
 import os
@@ -24,6 +28,7 @@ from datetime import datetime
 
 import openpyxl
 
+from core import db_profile
 from core.database import DatabaseManager
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'uploads')
@@ -235,6 +240,10 @@ def validate(parsed: dict, db=None) -> dict:
     db = db or DatabaseManager()
     l1_map, l2_codes = _domain_maps(db)
     biz_cols = _biz_table_cols(db)
+    biz_name = db_profile.current()['business']
+    # S2 表清单（S4/S2B 存在性校核用：模板自带的新表将按 S2b 自动建表，降级为 warn）
+    s2_tables = {str(_f(rec, '表名')[0]) for rec in parsed.get('S2', {}).get('rows', [])
+                 if _f(rec, '表名')[0] not in (None, '')}
     cv_dims, cv_items = _code_value_maps(db)  # 改进2：库内码值现状（交叉校核依据）
     result = {}
 
@@ -272,7 +281,7 @@ def validate(parsed: dict, db=None) -> dict:
                 if not m or m.group(1) not in l2_codes:
                     _issue(b, r, 'warn', f'二级业务分类[{sub}]无法解析到 business_domains')
             if tname and tname not in biz_cols:
-                _issue(b, r, 'warn', f'表[{tname}]在 marketing_40 不存在（仅建档，不阻断）')
+                _issue(b, r, 'warn', f'表[{tname}]在业务库 {biz_name} 不存在，执行转换时将按 S2b 字段明细自动建表')
             if not bad:
                 b['ok'] += 1
         result['S2'] = b
@@ -296,11 +305,12 @@ def validate(parsed: dict, db=None) -> dict:
             # 是否主键取值应为 0/1
             if ispk not in (None, '') and str(ispk).strip() not in ('0', '1'):
                 _issue(b, r, 'warn', f'是否主键[{ispk}]非 0/1，按 0 处理')
-            # 表/列存在性交叉校核（仅 warn，允许建档未来表）
+            # 表/列存在性交叉校核：库内不存在的表若属 S2 清单将自动建表（warn），否则仅建档
             if tname and tname not in biz_cols:
-                _issue(b, r, 'warn', f'表[{tname}]在 marketing_40 不存在（仅建档，不阻断）')
+                note = '执行转换时将按本 Sheet 自动建表' if tname in s2_tables else '仅建档，不阻断'
+                _issue(b, r, 'warn', f'表[{tname}]在业务库 {biz_name} 不存在（{note}）')
             elif tname and colname and colname not in biz_cols[tname]:
-                _issue(b, r, 'warn', f'字段[{tname}.{colname}]在 marketing_40 不存在（仅建档，不阻断）')
+                _issue(b, r, 'warn', f'字段[{tname}.{colname}]在业务库 {biz_name} 不存在（仅建档，不阻断）')
             if not bad:
                 b['ok'] += 1
         result['S2B'] = b
@@ -395,10 +405,15 @@ def validate(parsed: dict, db=None) -> dict:
             if not bad:
                 for t, c, side in ((st, sc, '源'), (tt, tc, '目标')):
                     if t not in biz_cols:
-                        _issue(b, r, 'fail', f'{side}表[{t}]在 marketing_40 不存在')
-                        bad = True
+                        if t in s2_tables:
+                            # 模板自带新表：执行转换时先自动建表，关联可正常入库
+                            _issue(b, r, 'warn',
+                                   f'{side}表[{t}]在业务库 {biz_name} 不存在，将随自动建表创建')
+                        else:
+                            _issue(b, r, 'fail', f'{side}表[{t}]在业务库 {biz_name} 不存在')
+                            bad = True
                     elif c not in biz_cols[t]:
-                        _issue(b, r, 'fail', f'{side}列[{t}.{c}]在 marketing_40 不存在')
+                        _issue(b, r, 'fail', f'{side}列[{t}.{c}]在业务库 {biz_name} 不存在')
                         bad = True
             if not bad:
                 b['ok'] += 1
@@ -551,6 +566,122 @@ def _existing_doc_text(conn, table_name, column_name):
         return None
 
 
+# ==================== 自动建表（S2/S2b → 当前业务库缺失表 DDL） ====================
+
+# DDL 不可参数化：表/列名与数据类型走白名单校验，模板值绝不直接拼接进 SQL
+_IDENT_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]{0,63}$')
+_DTYPE_RE = re.compile(
+    r'^\s*(BIGINT|INT|MEDIUMINT|SMALLINT|TINYINT|DOUBLE|FLOAT|'
+    r'DECIMAL\s*\(\s*\d{1,2}\s*(?:,\s*\d{1,2}\s*)?\)|'
+    r'VARCHAR\s*\(\s*\d{1,5}\s*\)|CHAR\s*\(\s*\d{1,4}\s*\)|'
+    r'DATETIME|DATE|TIME|TIMESTAMP|TEXT|LONGTEXT)\s*$', re.IGNORECASE)
+
+
+def _sql_comment(s):
+    """DDL COMMENT 串转义（反斜杠/单引号/换行）。"""
+    return re.sub(r'\s+', ' ', str(s or '')).replace('\\', '\\\\').replace("'", "''")
+
+
+def _build_table_ddl(tname, cname, cols, wide_to_text=False):
+    """组装 CREATE TABLE DDL。wide_to_text=True 时把非主键宽字符列 VARCHAR/CHAR(n≥192)
+    降级为 TEXT（规避 InnoDB 65535 行宽上限，1118 错误重试用；主键列保持原类型，
+    TEXT 不能直接作主键）。返回 (ddl, 列数, 主键列, 非法字段或None)。"""
+    defs, pks, seen, bad = [], [], set(), None
+    for colname, dt, cmt, is_pk in cols:
+        if colname in seen:
+            continue
+        m = _DTYPE_RE.match(dt)
+        if not _IDENT_RE.match(colname) or not m:
+            bad = (colname, dt)
+            break
+        seen.add(colname)
+        dt_sql = re.sub(r'\s+', '', m.group(1)).upper()
+        if wide_to_text and not is_pk:
+            vm = re.match(r'^(?:VAR)?CHAR\((\d+)\)$', dt_sql)
+            if vm and int(vm.group(1)) >= 192:
+                dt_sql = 'TEXT'
+        defs.append(f"`{colname}` {dt_sql} COMMENT '{_sql_comment(cmt)}'")
+        if is_pk:
+            pks.append(colname)
+    if bad:
+        return None, 0, [], bad
+    if pks:
+        defs.append('PRIMARY KEY (' + ', '.join(f'`{c}`' for c in pks) + ')')
+    ddl = (f'CREATE TABLE IF NOT EXISTS `{tname}` (' + ', '.join(defs) +
+           f") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='{_sql_comment(cname)}'")
+    return ddl, len(seen), pks, None
+
+
+def _create_missing_biz_tables(db, parsed, validation, run_id, P, emit):
+    """自动建表：S2 清单中当前业务库（connect_business 档位，生产/暂存跟随设置页）尚不
+    存在的表，按 S2b 字段明细执行 CREATE TABLE IF NOT EXISTS（只增不改：已存在表绝不
+    ALTER/DROP）。列序保持模板行序；是否主键=1 合成 PRIMARY KEY。每表写一条 system 溯源
+    （field_value=DDL 全文）。返回 {'created': n, 'failed': n}。"""
+    biz_name = db_profile.current()['business']
+    existing = set(_biz_table_cols(db))  # 库内已有表名集合
+    cols_by_table = {}
+    for rec in parsed.get('S2B', {}).get('rows', []):
+        if _row_failed(validation, 'S2B', rec['src_row']):
+            continue
+        tname, _ = _f(rec, '表名')
+        colname, _ = _f(rec, '字段名')
+        dt, _ = _f(rec, '数据类型')
+        cmt, _ = _f(rec, '字段中文注释')
+        ispk, _ = _f(rec, '是否主键')
+        if tname in (None, '') or colname in (None, ''):
+            continue
+        cols_by_table.setdefault(str(tname).strip(), []).append(
+            (str(colname).strip(), str(dt or ''), cmt, str(ispk or '').strip() == '1'))
+    created = failed = 0
+    with db.connect_business() as biz:
+        for rec in parsed.get('S2', {}).get('rows', []):
+            r = rec['src_row']
+            if _row_failed(validation, 'S2', r):
+                continue
+            tname, _ = _f(rec, '表名')
+            cname, _ = _f(rec, '中文名')
+            if tname in (None, ''):
+                continue
+            tname = str(tname).strip()
+            if tname in existing:
+                continue
+            if not _IDENT_RE.match(tname):
+                failed += 1
+                emit('ddl', f'跳过建表 {tname}：表名不合法（须字母/下划线开头）')
+                continue
+            cols = cols_by_table.get(tname) or []
+            if not cols:
+                failed += 1
+                emit('ddl', f'跳过建表 {tname}：S2b 无字段定义')
+                continue
+            ddl, ncol, pks, bad = _build_table_ddl(tname, cname, cols)
+            if bad:
+                failed += 1
+                emit('ddl', f'跳过建表 {tname}：字段[{bad[0]}]名称或类型[{bad[1]}]不在白名单')
+                continue
+            try:
+                try:
+                    biz.execute(ddl)
+                except Exception as e:
+                    # InnoDB 行宽上限 65535（错误 1118）：宽字符列降级 TEXT 重试一次
+                    if not e.args or e.args[0] != 1118:
+                        raise
+                    ddl, ncol, pks, _ = _build_table_ddl(tname, cname, cols, wide_to_text=True)
+                    biz.execute(ddl)
+                    emit('ddl', f'{tname} 行宽超限（1118），宽 VARCHAR 列已降级 TEXT 重建')
+                biz.commit()  # DDL 在 MySQL 隐式提交，commit 仅为语义完整
+                existing.add(tname)
+                created += 1
+                emit('ddl', f'已建表 {biz_name}.{tname}：{ncol} 列'
+                            + (f'，主键 {"+".join(pks)}' if pks else '，无主键'))
+                P(run_id, 'S2', r, tname, biz_name, 'create_table', 'system',
+                  'S2/S2b 模板自动建表', ddl, 'na')
+            except Exception as e:
+                failed += 1
+                emit('ddl', f'建表失败 {tname}: {str(e)[:150]}')
+    return {'created': created, 'failed': failed}
+
+
 def convert_run(run_id: str, parsed: dict, validation: dict,
                 progress_cb=None, db=None) -> dict:
     """执行转换：按方案口径逐 Sheet 入库 + 逐字段写 ingest_provenance；收集 LLM 标注任务。
@@ -681,6 +812,15 @@ def convert_run(run_id: str, parsed: dict, validation: dict,
                 P(run_id, 'S2B', r, 'schema_column_docs', key, 'doc_text', 'direct', c_doc, doctext, 'na')
             stats['converted']['S2B'] = stats['converted'].get('S2B', 0) + 1
         _emit('convert', f'S2b 完成 {stats["converted"].get("S2B", 0)} 行')
+
+        # ---- 自动建表：S2 清单中当前业务库不存在的表，按 S2b 字段明细 CREATE TABLE ----
+        # （必须在 S4 之前：关联关系入库依赖新表已存在；只增不改，已存在表不受影响）
+        ddl_res = _create_missing_biz_tables(db, parsed, validation, run_id, P, _emit)
+        if ddl_res['created']:
+            stats['converted']['BIZ_TABLES'] = ddl_res['created']
+        if ddl_res['failed']:
+            stats['skipped']['BIZ_TABLES_failed'] = ddl_res['failed']
+        _emit('ddl', f'自动建表完成：新建 {ddl_res["created"]} 张，跳过/失败 {ddl_res["failed"]} 张')
 
         # ---- S3D → code_values（upsert by code_name）+ code_value_column_form ----
         for rec in parsed.get('S3D', {}).get('rows', []):

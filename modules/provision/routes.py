@@ -119,6 +119,15 @@ def provision_execute(run_id):
             except Exception as e:
                 print(f"[WARN] 关键词提取失败: {e}")
                 events.put({'stage': 'keywords', 'msg': f'关键词提取失败: {e}'})
+            # 自动建表/文档变更后刷新 Schema 缓存：数据资源等模块读 SchemaPreloader 启动快照，
+            # 不刷新则新建表要重启后端才可见（2026-09-08 用户报告）
+            events.put({'stage': 'cache', 'msg': '刷新 Schema 缓存（数据资源/问数立即可见新表）'})
+            try:
+                from core.context import refresh_schema_caches
+                refresh_schema_caches()
+            except Exception as e:
+                print(f"[WARN] Schema 缓存刷新失败: {e}")
+                events.put({'stage': 'cache', 'msg': f'Schema 缓存刷新失败（重启后端后生效）: {e}'})
             events.put({'stage': 'annotate', 'msg': f"LLM 批量标注（{len(out['llm_tasks'])} 条任务）"})
             ann = pv.annotate_llm(run_id, out['llm_tasks'],
                                   progress_cb=lambda e: events.put(e))
@@ -192,6 +201,13 @@ def provision_review_batch_confirm():
         return jsonify({'success': False, 'error': f'单批最多 2000 条（本次 {len(ids)}）'}), 400
     try:
         result = pv.batch_confirm([int(i) for i in ids])
+        # 确认回填改动了治理文档（preloader 注释兜底源）→ 刷新 Schema 缓存
+        if result.get('confirmed'):
+            try:
+                from core.context import refresh_schema_caches
+                refresh_schema_caches()
+            except Exception as e:
+                print(f"[WARN] Schema 缓存刷新失败: {e}")
         return jsonify({'success': True, **result})
     except Exception as e:
         import traceback
@@ -205,6 +221,12 @@ def provision_review_confirm(prov_id):
     data = request.get_json(silent=True) or {}
     try:
         updated = pv.confirm_provenance(prov_id, data.get('field_value'))
+        # 确认回填改动了治理文档（preloader 注释兜底源）→ 刷新 Schema 缓存
+        try:
+            from core.context import refresh_schema_caches
+            refresh_schema_caches()
+        except Exception as e:
+            print(f"[WARN] Schema 缓存刷新失败: {e}")
         return jsonify({'success': True, 'item': updated})
     except LookupError as e:
         return jsonify({'success': False, 'error': str(e)}), 404
