@@ -96,7 +96,7 @@ def create_app() -> Flask:
     @app.route('/')
     def index():
         if not os.path.isdir(frontend_dist):
-            return ('frontend/dist 不存在：请先在 frontend/ 目录执行 npm run build', 503)
+            return ('frontend/dist 不存在：请先在 frontend/ 目录执行 pnpm install && pnpm run build', 503)
         return send_from_directory(frontend_dist, 'index.html')
 
     @app.route('/<path:path>')
@@ -105,7 +105,7 @@ def create_app() -> Flask:
         if path == 'api' or path.startswith('api/'):
             abort(404)
         if not os.path.isdir(frontend_dist):
-            return ('frontend/dist 不存在：请先在 frontend/ 目录执行 npm run build', 503)
+            return ('frontend/dist 不存在：请先在 frontend/ 目录执行 pnpm install && pnpm run build', 503)
         hit = _dist_file(path)
         if hit is not None:
             return hit
