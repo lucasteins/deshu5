@@ -58,6 +58,7 @@ const columns: DsColumn<CodeDomain>[] = [
   <DsDataTable
     :columns="columns"
     :rows="displayRows"
+    row-key="code_name"
     :loading="loading"
     :error="error"
     expandable
