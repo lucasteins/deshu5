@@ -46,7 +46,7 @@ const routes: RouteRecordRaw[] = [
 ]
 
 const router = createRouter({
-  // base 取自 vite base（/app/），保证构建后经 Flask /app 托管时路由正常
+  // base 取自 vite base（F3.2 切换后为 /），保证构建后经 Flask 根路径托管时路由正常
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
 })
