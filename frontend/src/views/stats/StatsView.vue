@@ -109,6 +109,32 @@ interface KpiSpec {
   to: { name: string; hash?: string }
 }
 
+/* ---------- KPI 趋势线 / 环比的数据源（F1.2 增补） ----------
+ * 后端在每次 /api/stats 时把指标按天落一行快照（表 stats_snapshots），历史随使用积累。
+ *  - 序列：≥3 期才画（1~2 个点画不出趋势，画了反而误导）
+ *  - 环比：与「≤7 天前最近一条」比较，无基准则不给
+ *  - 回退：快照不足时，问答对资产仍用其自身 `ingest_time` 的按周累计序列与「近 7 天新增」
+ *    （该指标本就有真实时间列）——保证机制落地当天不出现空白回归。 */
+const MIN_SERIES_POINTS = 3
+
+function kpiSnapshotSeries(metricKey: string): number[] | undefined {
+  const points = stats.value?.kpi_series?.series?.[metricKey] ?? []
+  return points.length >= MIN_SERIES_POINTS ? points.map((p) => p.v) : undefined
+}
+
+function kpiSnapshotDelta(
+  metricKey: string,
+  unit: string,
+): { text: string; direction: 'up' | 'down' | 'flat' } | null {
+  const d7 = stats.value?.kpi_series?.delta7?.[metricKey]
+  if (typeof d7 !== 'number') return null
+  const direction = d7 > 0 ? 'up' : d7 < 0 ? 'down' : 'flat'
+  const abs = Math.abs(d7)
+  const num = Number.isInteger(abs) ? String(abs) : abs.toFixed(1)
+  const sign = d7 > 0 ? '+' : d7 < 0 ? '−' : '±'
+  return { text: `近 7 天 ${sign}${num}${unit}`, direction }
+}
+
 const kpis = computed<KpiSpec[]>(() => {
   const b = stats.value?.basic
   return [
@@ -117,6 +143,8 @@ const kpis = computed<KpiSpec[]>(() => {
       label: '业务表',
       value: b?.tables ?? '—',
       unit: '张',
+      delta: kpiSnapshotDelta('tables', ' 张'),
+      series: kpiSnapshotSeries('tables'),
       hint: '下钻到数据资源 · 目录模式',
       to: { name: 'resources', hash: '#tab=catalog' },
     },
@@ -125,6 +153,8 @@ const kpis = computed<KpiSpec[]>(() => {
       label: '字段总数',
       value: b?.columns ?? '—',
       unit: '个',
+      delta: kpiSnapshotDelta('columns', ' 个'),
+      series: kpiSnapshotSeries('columns'),
       hint: '下钻到数据资源 · 目录模式',
       to: { name: 'resources', hash: '#tab=catalog' },
     },
@@ -133,6 +163,8 @@ const kpis = computed<KpiSpec[]>(() => {
       label: '码值域',
       value: b?.code_domains ?? '—',
       unit: '个',
+      delta: kpiSnapshotDelta('code_domains', ' 个'),
+      series: kpiSnapshotSeries('code_domains'),
       hint: '下钻到数据资源 · 码值库',
       to: { name: 'resources', hash: '#tab=code' },
     },
@@ -141,8 +173,11 @@ const kpis = computed<KpiSpec[]>(() => {
       label: '问答对资产',
       value: stats.value?.qa_pairs.total ?? '—',
       unit: '条',
-      delta: { text: `近 7 天 +${week7New.value}`, direction: 'up' },
-      series: qaCumulative.value,
+      delta: kpiSnapshotDelta('qa_pairs', ' 条') ?? {
+        text: `近 7 天 +${week7New.value}`,
+        direction: 'up',
+      },
+      series: kpiSnapshotSeries('qa_pairs') ?? qaCumulative.value,
       hint: '下钻到问答对库',
       to: { name: 'qa-lib' },
     },
@@ -151,6 +186,8 @@ const kpis = computed<KpiSpec[]>(() => {
       label: 'SQL 执行成功率',
       value: stats.value?.generation_health.exec_success_rate ?? '—',
       unit: '%',
+      delta: kpiSnapshotDelta('exec_success_rate', 'pp'),
+      series: kpiSnapshotSeries('exec_success_rate'),
       accent: true,
       hint: '下钻到错题集',
       to: { name: 'errors' },

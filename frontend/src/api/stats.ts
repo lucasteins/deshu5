@@ -58,6 +58,28 @@ export interface StatsData {
     where_condition_correct: number
     aggregation_correct: number
   }
+  /**
+   * 指标历史序列（F1.2 增补）——KPI 卡趋势线 / 环比的数据源。
+   *
+   * 由后端在每次 `/api/stats` 时按天落一行快照积累（表 `stats_snapshots`），
+   * **从零开始积累**：≥3 期才绘趋势线（`series`），≥7 天前有基准才有环比（`delta7`）。
+   */
+  kpi_series?: KpiSeries
+}
+
+/** 单指标逐日快照点 */
+export interface MetricPoint {
+  /** 抓取日 YYYY-MM-DD */
+  d: string
+  v: number
+}
+
+export interface KpiSeries {
+  /** metric_key → 逐日序列（升序） */
+  series: Record<string, MetricPoint[]>
+  /** metric_key → 与「≤7 天前最近一条」的差值；无可比基准的指标不出现 */
+  delta7: Record<string, number>
+  days?: number
 }
 
 export interface StatsResponse {

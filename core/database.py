@@ -481,4 +481,10 @@ def init_all_tables():
     init_qa_pairs_columns()
     init_code_values_tables()
     init_report_tables()
+    # 指标快照（KPI 真实趋势线/环比的数据源，F1.2 增补）：放最后，失败不影响上述基础表
+    try:
+        from core.stats_history import init_stats_snapshots_table
+        init_stats_snapshots_table()
+    except Exception as e:
+        print(f"[WARN] stats_snapshots 建表失败（指标快照将不可用）: {e}")
     print("[init] 所有表初始化完成")
