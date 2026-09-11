@@ -88,7 +88,9 @@ def create_app() -> Flask:
         """dist 内文件直出；不存在或越界返回 None（realpath 归一化阻断 ../ 越权读取）"""
         target = os.path.realpath(os.path.join(frontend_dist, path))
         if target.startswith(frontend_dist + os.sep) and os.path.isfile(target):
-            return send_from_directory(frontend_dist, os.path.relpath(target, frontend_dist))
+            # safe_join 只认 '/' 分隔符：Windows 下 relpath 的反斜杠会被判越权 → 404
+            rel = os.path.relpath(target, frontend_dist).replace(os.sep, '/')
+            return send_from_directory(frontend_dist, rel)
         return None
 
     @app.route('/')
