@@ -66,7 +66,7 @@ const route = useRoute()
         <b>李云舟</b>
         <span>数据治理组</span>
       </div>
-      <el-tooltip content="设置" placement="right" :show-after="200" :disabled="!collapsed">
+      <el-tooltip content="设置" placement="right" :show-after="300" :disabled="!collapsed">
         <button
           class="settings-btn"
           type="button"
@@ -77,7 +77,7 @@ const route = useRoute()
           <span v-if="!collapsed" class="settings-btn__label">设置</span>
         </button>
       </el-tooltip>
-      <el-tooltip :content="collapsed ? '展开侧栏' : '折叠侧栏'" placement="right" :show-after="200">
+      <el-tooltip :content="collapsed ? '展开侧栏' : '折叠侧栏'" placement="right" :show-after="300">
         <button
           class="collapse-btn"
           type="button"
@@ -296,6 +296,7 @@ const route = useRoute()
   border-radius: var(--r-sm);
   background: transparent;
   color: var(--text-3);
+  font-size: 16px;
   cursor: pointer;
   transition:
     background-color var(--dur-fast) var(--ease-standard),
@@ -328,6 +329,7 @@ const route = useRoute()
   border-radius: var(--r-sm);
   background: transparent;
   color: var(--text-3);
+  font-size: 16px;
   cursor: pointer;
   transition:
     background-color var(--dur-fast) var(--ease-standard),
