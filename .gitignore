@@ -27,3 +27,16 @@ history/
 
 # 外部工具记忆目录（自动再生）
 .workbuddy/
+
+# 前端工程（Vue 3 + Vite）：依赖与构建产物不入库
+frontend/node_modules/
+frontend/dist/
+
+# 本地未入库物料（2026-09-11 F3.2 拍板显式声明；均为本地工作区留存，防误 add）
+.DS_Store
+app.log
+app.pid
+演示汇报/
+前端重构/
+本地适配与修复记录.md
+前端设计优化提示词.md

@@ -1,0 +1,232 @@
+/* ============================================================
+ * deshu5 设计 Token —— 方向 B「霜白仪表」（设计稿 §4.3 全量落地）
+ *
+ * 唯一色彩 / 字体 / 间距 / 圆角阴影 / 动效来源；组件一律 var() 消费，禁止硬编码。
+ * 命名契约：--{类别}-{层级}
+ *   色彩：--canvas / --surface-* / --sunken / --line-* / --text-* / --accent* /
+ *         --ember* / 语义五色（-fill 填充版 / -soft 软底版）/ --c1..8 / --seq-1..5
+ *   字体：--font-*（字族）、--fs-* / --lh-*（字号 / 行高，受 --fs-scale / --lh-bump
+ *         控制，供「演示模式」一键放大）、--fw-*（字重）、--ls-*（字距）
+ *   间距：--sp-*｜圆角：--r-*｜阴影：--e1..4 / --focus-ring｜动效：--dur-* / --ease-*
+ * 模式：
+ *   明色主模 = :root；暗色副模「观测台」 = [data-theme="dark"]；演示模式 = [data-mode="demo"]
+ * 使用约定：
+ *   - 语义色「文本版」（--success 等）用于文字 / 图标 / 描边；「填充版」（--success-fill
+ *     等）用于填充块 / 图表；「软底版」（--success-soft 等）用于浅底徽标 / 选中态。
+ *   - 图表分类色 --c1..8 与 UI 语义色刻意分开（见设计稿 §4.3.1 说明）。
+ * ============================================================ */
+
+:root {
+  /* ---------- 背景与面板（层级差 3~5% 明度，靠 1px 描边显形） ---------- */
+  --canvas: #f5f7f9;        /* 全局底 */
+  --surface-1: #ffffff;     /* 卡片 / 面板 */
+  --surface-2: #fafbfc;     /* 次级面板 / 表格 zebra / 悬浮态 */
+  --sunken: #edf1f4;        /* 表头 / 输入框内嵌 / 代码块底 */
+  --overlay-scrim: rgba(16, 24, 40, 0.32);
+  --overlay-blur: blur(2px);
+
+  /* ---------- 描边：三层，全部 1px ---------- */
+  --line-subtle: #e7ebef;
+  --line: #d8dee5;
+  --line-strong: #bfc8d2;
+
+  /* ---------- 文字：五层 ---------- */
+  --text-strong: #181c22;    /* ≥18px 标题 / KPI 数字 / 数据强调 */
+  --text-1: #2a3038;         /* 正文 / 表格主体 */
+  --text-2: #5a6472;         /* 次要说明 / 表头 / 辅助 */
+  --text-3: #67707c;         /* 标签 / 时间戳 / 单位 / placeholder */
+  --text-4: #a7b0bb;         /* 禁用 */
+  --text-on-accent: #ffffff;
+
+  /* ---------- 主色：仪表青 ---------- */
+  --accent: #0f7c86;
+  --accent-hover: #0b6a73;
+  --accent-press: #095a62;
+  --accent-soft: #e6f2f3;    /* 选中行 / 浅底 */
+  --accent-line: #9ccbd0;    /* 浅边框 */
+  --accent-ring: rgba(15, 124, 134, 0.18);
+
+  /* ---------- 品牌暖金：点缀，≤3% 像素 ---------- */
+  --ember: #c76a1a;          /* 作为文字 / 描边 */
+  --ember-fill: #f59e0b;     /* 作为填充块 */
+  --ember-soft: #fdf3e4;
+
+  /* ---------- 语义色：文本版 / 填充版 / 软底版 ---------- */
+  --success: #0f7b4f;
+  --success-fill: #16a34a;
+  --success-soft: #e7f5ee;
+  --warning: #b45309;
+  --warning-fill: #f59e0b;
+  --warning-soft: #fef3e2;
+  --danger: #c8362b;
+  --danger-fill: #e5484d;
+  --danger-soft: #fdecec;
+  --info: #1d6fd0;
+  --info-fill: #3b82f6;
+  --info-soft: #eaf2fd;
+
+  /* ---------- 图表色板（与 UI 语义色刻意分开） ---------- */
+  /* 分类色：按顺序取用，明暗模共用（已做暗底可读性校验） */
+  --c1: #0f7c86; /* 青（主系列） */
+  --c2: #3b82f6; /* 蓝 */
+  --c3: #f59e0b; /* 琥珀 */
+  --c4: #8b5cf6; /* 紫（仅第 4 顺位数据系列，不用于 UI） */
+  --c5: #16a34a; /* 绿 */
+  --c6: #e5484d; /* 红 */
+  --c7: #06b6d4; /* 亮青 */
+  --c8: #a16207; /* 褐 */
+  /* 连续色阶（明色底，5 阶） */
+  --seq-1: #e6f2f3;
+  --seq-2: #b8dde1;
+  --seq-3: #6fb3ba;
+  --seq-4: #2e949e;
+  --seq-5: #0f7c86;
+
+  /* ---------- 字体 ---------- */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC',
+    'Source Han Sans SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'IBM Plex Mono',
+    Menlo, Consolas, 'Courier New', monospace;
+
+  /* ---------- 字体阶梯（§4.3.2；字号 ×--fs-scale、行高 +--lh-bump，演示模式一键放大） ---------- */
+  --fs-scale: 1;
+  --lh-bump: 0px;
+
+  --fs-display-1: calc(32px * var(--fs-scale));   --lh-display-1: calc(40px + var(--lh-bump));   --fw-display-1: 600;  --ls-display-1: -0.02em;
+  --fs-display-2: calc(24px * var(--fs-scale));   --lh-display-2: calc(32px + var(--lh-bump));   --fw-display-2: 600;  --ls-display-2: -0.015em;
+  --fs-h1: calc(20px * var(--fs-scale));          --lh-h1: calc(28px + var(--lh-bump));          --fw-h1: 600;         --ls-h1: -0.01em;
+  --fs-h2: calc(16px * var(--fs-scale));          --lh-h2: calc(24px + var(--lh-bump));          --fw-h2: 600;
+  --fs-h3: calc(14px * var(--fs-scale));          --lh-h3: calc(22px + var(--lh-bump));          --fw-h3: 600;
+  --fs-body-lg: calc(15px * var(--fs-scale));     --lh-body-lg: calc(26px + var(--lh-bump));     --fw-body-lg: 400;
+  --fs-body: calc(14px * var(--fs-scale));        --lh-body: calc(22px + var(--lh-bump));        --fw-body: 400;
+  --fs-body-sm: calc(13px * var(--fs-scale));     --lh-body-sm: calc(20px + var(--lh-bump));     --fw-body-sm: 400;
+  --fs-caption: calc(12px * var(--fs-scale));     --lh-caption: calc(18px + var(--lh-bump));     --fw-caption: 400;
+  --fs-micro: calc(11px * var(--fs-scale));       --lh-micro: calc(16px + var(--lh-bump));       --fw-micro: 500;      --ls-micro: 0.04em;
+  --fs-code-lg: calc(14px * var(--fs-scale));     --lh-code-lg: calc(24px + var(--lh-bump));     --fw-code-lg: 400;
+  --fs-code: calc(13px * var(--fs-scale));        --lh-code: calc(20px + var(--lh-bump));        --fw-code: 400;
+  --fs-num-xl: calc(32px * var(--fs-scale));      --lh-num-xl: calc(36px + var(--lh-bump));      --fw-num-xl: 500;     --ls-num-xl: -0.01em;
+  --fs-num-lg: calc(20px * var(--fs-scale));      --lh-num-lg: calc(26px + var(--lh-bump));      --fw-num-lg: 500;
+  --fs-num: calc(14px * var(--fs-scale));         --lh-num: calc(22px + var(--lh-bump));         --fw-num: 400;
+  --fs-num-sm: calc(12px * var(--fs-scale));      --lh-num-sm: calc(18px + var(--lh-bump));      --fw-num-sm: 500;
+
+  /* 表格行高：紧凑 36 / 舒适 44 / 宽松 52（§4.3.3；演示模式切宽松） */
+  --table-row-h: 44px;
+  /* 图表线宽：默认 2px，演示模式 3px（§4.3.5） */
+  --chart-stroke: 2px;
+
+  /* ---------- 间距节奏（4px 基数） ---------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* ---------- 圆角（≥16px 禁用；--r-lg 是上限） ---------- */
+  --r-xs: 3px;   /* 徽标 / 标签 */
+  --r-sm: 6px;   /* 按钮 / 输入框 / 下拉项 */
+  --r-md: 8px;   /* 卡片 / 面板 / 表格容器 */
+  --r-lg: 12px;  /* 模态 / 抽屉 / 大浮层 */
+  --r-full: 999px;
+
+  /* ---------- 阴影（四级，不带色） ---------- */
+  --e1: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --e2: 0 2px 8px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --e3: 0 8px 24px rgba(16, 24, 40, 0.1);
+  --e4: 0 16px 48px rgba(16, 24, 40, 0.14);
+  --focus-ring: 0 0 0 3px var(--accent-ring);
+
+  /* ---------- 动效（§4.3.5；禁止 overshoot 弹性曲线） ---------- */
+  --dur-instant: 80ms;      /* 按钮按压 / 复选框切换 */
+  --dur-fast: 120ms;        /* hover 变色 / 页签淡入 / 行高亮 */
+  --dur-base: 180ms;        /* 默认过渡 */
+  --dur-slow: 240ms;        /* 抽屉 / 模态 / Toast 进入 */
+  --dur-deliberate: 320ms;  /* 页面级切换 / 图谱聚焦 */
+  --dur-progress: 400ms;    /* 图表首次生长 */
+  --dur-shimmer: 1600ms;    /* 骨架屏 shimmer（linear，循环） */
+  --dur-pulse: 1200ms;      /* 运行中状态环（限 1 次循环） */
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);  /* 通用：快进慢出 */
+  --ease-out: cubic-bezier(0.4, 0, 1, 1);       /* 退出 */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);  /* 位置移动 */
+  --ease-linear: linear;                        /* 进度条 / shimmer / 打字机 */
+}
+
+/* ============================================================
+ * 暗色副模「观测台」（设计稿 §4.3.1）
+ * ============================================================ */
+[data-theme='dark'] {
+  --canvas: #0e1116;
+  --surface-1: #151a21;
+  --surface-2: #1b212a;
+  --sunken: #10141a;
+  --overlay-scrim: rgba(6, 8, 11, 0.72);
+
+  --line-subtle: rgba(255, 255, 255, 0.06);
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.18);
+
+  --text-strong: #f2f5f8;
+  --text-1: #e7ebf0;
+  --text-2: #a3adba;
+  --text-3: #717c8a;
+  --text-4: #4c5563;
+  --text-on-accent: #0e1116; /* 暗模下主按钮用深墨字 */
+
+  --accent: #34cbb8;
+  --accent-hover: #52dccb;
+  --accent-press: #1fa795;
+  --accent-soft: rgba(52, 203, 184, 0.12);
+  --accent-line: rgba(52, 203, 184, 0.32);
+  --accent-ring: rgba(52, 203, 184, 0.22);
+
+  --ember: #e8a055;
+  --ember-fill: #e8a055;
+  --ember-soft: rgba(232, 160, 85, 0.14);
+
+  --success: #3dd68c;
+  --success-soft: rgba(61, 214, 140, 0.14);
+  --warning: #f2b33d;
+  --warning-soft: rgba(242, 179, 61, 0.14);
+  --danger: #f2604f;
+  --danger-soft: rgba(242, 96, 79, 0.14);
+  --info: #6aa8ff;
+  --info-soft: rgba(106, 168, 255, 0.14);
+
+  --c1: #34cbb8;
+  --c2: #6aa8ff;
+  --c3: #e8a055;
+  --c4: #a78bfa;
+  --c5: #4ade80;
+  --c6: #f2604f;
+  --c7: #5fd0e8;
+  --c8: #d4a24c;
+  --seq-1: #123b3f;
+  --seq-2: #1a575c;
+  --seq-3: #247a81;
+  --seq-4: #2fa39a;
+  --seq-5: #34cbb8;
+}
+
+/* ============================================================
+ * 「演示模式」——投屏 token 覆盖（设计稿 §4.3.5）
+ * 它是一个覆盖不是新页面：字号 ×1.15 / 行高 +2px / 行高切宽松 / 线宽 3px / 动效放慢。
+ * ============================================================ */
+[data-mode='demo'] {
+  --fs-scale: 1.15;
+  --lh-bump: 2px;
+  --table-row-h: 52px;
+  --chart-stroke: 3px;
+  --dur-base: 240ms;
+}
+
+/* 描边加深 / 次要文字加深仅用于明色主模（设计稿给值基于浅底；
+ * 暗模下保持原值，避免反相失真） */
+[data-mode='demo']:not([data-theme='dark']) {
+  --line: #c9d1da;
+  --text-2: #4c5663;
+}

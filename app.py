@@ -22,7 +22,7 @@ try:
 except Exception:
     pass
 
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, abort, jsonify, redirect, send_from_directory
 
 import config
 
@@ -49,7 +49,9 @@ def _startup_init():
 
 
 def create_app() -> Flask:
-    app = Flask(__name__, static_folder='static', static_url_path='')
+    # static_folder=None（F3.2 切换）：旧 UI static/ 已归档 archive/frontend-v1/、不再托管；
+    # 前端改由下方根路由直出 frontend/dist
+    app = Flask(__name__, static_folder=None)
     app.config['JSON_AS_ASCII'] = False
 
     # ---- 注册四个业务模块蓝图 ----
@@ -68,11 +70,7 @@ def create_app() -> Flask:
     app.register_blueprint(ontology_bp)
     app.register_blueprint(report_bp)
 
-    # ---- 静态页面与健康检查 ----
-    @app.route('/')
-    def index():
-        return send_from_directory('static', 'index.html')
-
+    # ---- 健康检查 ----
     @app.route('/api/health')
     def health():
         return jsonify({
@@ -80,6 +78,45 @@ def create_app() -> Flask:
             'version': '5.0.0',
             'modules': ['settings', 'training', 'resources', 'provision', 'ontology', 'report'],
         })
+
+    # ---- 前端（Vue 3）托管：/（F3.2 切换，2026-09-11 皮卡丘拍板）----
+    # 依据 03-迁移方案 §3.3：build base=/；dist 静态文件直出；非文件路径兜底回 index.html（SPA fallback）。
+    # 旧 UI（static/）已归档 archive/frontend-v1/、不再托管；/app/** 保留 302 过渡重定向至根。
+    frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend', 'dist')
+
+    def _dist_file(path: str):
+        """dist 内文件直出；不存在或越界返回 None（realpath 归一化阻断 ../ 越权读取）"""
+        target = os.path.realpath(os.path.join(frontend_dist, path))
+        if target.startswith(frontend_dist + os.sep) and os.path.isfile(target):
+            return send_from_directory(frontend_dist, os.path.relpath(target, frontend_dist))
+        return None
+
+    @app.route('/')
+    def index():
+        if not os.path.isdir(frontend_dist):
+            return ('frontend/dist 不存在：请先在 frontend/ 目录执行 npm run build', 503)
+        return send_from_directory(frontend_dist, 'index.html')
+
+    @app.route('/<path:path>')
+    def frontend_root(path: str):
+        # /api/** 未被蓝图匹配时保持 404——SPA 兜底绝不吞 API 路径
+        if path == 'api' or path.startswith('api/'):
+            abort(404)
+        if not os.path.isdir(frontend_dist):
+            return ('frontend/dist 不存在：请先在 frontend/ 目录执行 npm run build', 503)
+        hit = _dist_file(path)
+        if hit is not None:
+            return hit
+        # 文件样路径（末段含扩展名）不回退 SPA，避免旧路径（如 /js/app.js）出「幽灵 200」
+        if '.' in os.path.basename(path):
+            abort(404)
+        return send_from_directory(frontend_dist, 'index.html')
+
+    @app.route('/app/', strict_slashes=False)
+    @app.route('/app/<path:path>')
+    def frontend_app_redirect(path: str = ''):
+        # F3.2 过渡：旧 /app 入口 302 重定向到根（保目验书签；稳定后可撤）
+        return redirect('/' + path, code=302)
 
     return app
 

@@ -1,0 +1,62 @@
+/* ============================================================
+ * 全局基础样式 —— 依赖 tokens.css（设计稿 §4.3 / §4.3.2 / §4.3.4 / §4.3.5）
+ * ============================================================ */
+
+/* 盒模型基线（设计稿 mockup 首行即 `*{box-sizing:border-box}`）：
+   设计稿里所有「固定高度 + 内边距」的组件（KPI 卡 126px、卡片头 50px 等）
+   都按 border-box 计算；缺此基线会让这类元素被内边距撑高。 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* 中英混排留空隙（§4.3.2） */
+  text-spacing-trim: space-first;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-1);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 数据产品的数字对齐底线（§4.3.2）：表格数值列 / KPI / 图表轴 / 徽标加 .tabular */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 中英混排术语补空隙（§4.3.2）：SQL、Schema、RAG、LLM 等加 .tech */
+.tech {
+  margin: 0 2px;
+}
+
+/* 暗色副模唯一光效：运行中状态环（§4.3.4，扩散半径 ≤24px） */
+[data-theme='dark'] .is-running {
+  box-shadow:
+    0 0 0 1px rgba(52, 203, 184, 0.24),
+    0 0 24px rgba(52, 203, 184, 0.1);
+}
+
+/* 降低动效偏好（§4.3.5）：降为 ~80ms 过渡，不做循环动画 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 80ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 80ms !important;
+  }
+}

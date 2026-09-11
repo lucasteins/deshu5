@@ -151,6 +151,10 @@ function initGraphData() {
     });
     const adj = {};
     RES.edges.forEach(e => {
+        // 悬空边防护（F3.1 对等修复，同新版 b29a418）：端点不在 nm 的边不进邻接表——
+        // 后端「表清单」与「关系」不同步时会出现（如已标准化改名的旧表名），否则 physics
+        // 取值 undefined 会中断渲染循环（本缺陷现存，当前数据下图谱页白屏）
+        if (!nm[e.from] || !nm[e.to]) return;
         (adj[e.from] = adj[e.from] || []).push(e.to);
         (adj[e.to] = adj[e.to] || []).push(e.from);
     });
@@ -208,6 +212,7 @@ function graphPhysics() {
         }
         for (const nb of (G.adj[aName] || [])) {
             const b = G.nm[nb];
+            if (!b) continue;
             fx -= (a.x - b.x) * att;
             fy -= (a.y - b.y) * att;
         }

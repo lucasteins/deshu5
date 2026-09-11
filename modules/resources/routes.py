@@ -445,6 +445,22 @@ def get_stats():
                 'exec_success_rate': round((health_row[2] or 0) * 100, 1)
             }
 
+        # ---- 指标快照（F1.2 增补）：把本次指标按天落库并取回近 120 天序列 + 环比 ----
+        # KPI 卡的趋势线/环比需要历史，而本接口是快照；快照随使用自然积累，无需调度器。
+        # 任一环节失败都不得影响看板主流程，故整段静默兜底。
+        kpi_series = {'series': {}, 'delta7': {}}
+        try:
+            from core.stats_history import capture_and_load
+            kpi_series = capture_and_load({
+                'tables': basic.get('tables', 0),
+                'columns': basic.get('columns', 0),
+                'code_domains': basic.get('code_domains', 0),
+                'qa_pairs': qa_total,
+                'exec_success_rate': gen_health.get('exec_success_rate', 0),
+            })
+        except Exception as e:
+            print(f"[WARN] 指标快照写入/读取失败（看板不受影响）: {e}")
+
         return jsonify({
             'success': True,
             'data': {
@@ -464,7 +480,9 @@ def get_stats():
                 'qa_pairs_dist': {'difficulty': difficulty_dist, 'source': source_dist},
                 'generation_health': gen_health,
                 'basic': basic,
-                'human_annotation': annotation_stats
+                'human_annotation': annotation_stats,
+                # 指标历史序列（近 120 天逐日 + 与 ≤7 天前基准的差值）——KPI 趋势线/环比数据源
+                'kpi_series': kpi_series
             }
         })
     except Exception as e:

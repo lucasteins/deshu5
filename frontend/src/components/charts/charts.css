@@ -1,0 +1,47 @@
+/* ============================================================
+ * 图表域公共样式（F1.2）
+ *
+ * ECharts 自绘的 tooltip HTML 不在 Vue 模板中，scoped 样式无法命中，
+ * 故这里统一提供全局样式（由 components/charts/index.ts 引入一次）。
+ * 依据：设计稿 §4.4.7「Tooltip：系列色块 8×8 + 系列名 12px + 值（等宽 600）」。
+ * ============================================================ */
+
+.d5tip {
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+.d5tip__t {
+  margin-bottom: 5px;
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+}
+.d5tip__row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 1px 0;
+}
+.d5tip__sw {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 2px;
+}
+.d5tip__n {
+  flex: 1;
+  color: var(--text-2);
+}
+.d5tip__v {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+.d5tip__p {
+  min-width: 42px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}

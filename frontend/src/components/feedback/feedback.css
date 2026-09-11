@@ -1,0 +1,76 @@
+/* ============================================================
+ * deshu5 反馈体系共享样式（设计稿 §4.4.1）
+ * 由 feedback 模块统一引入（toast.ts / confirm.ts / 状态组件），无需全局注册。
+ * ============================================================ */
+
+/* ---------- 门控 spinner：14px，主色，800ms linear 旋转（§4.4.3 加载阶梯） ---------- */
+.ds-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: ds-spin 800ms linear infinite;
+}
+
+@keyframes ds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- 错误态控件（行内校验，§4.4.1） ----------
+ * 用法：对控件加 .ds-invalid 类；错误文案用 <DsFieldError>。 */
+.ds-invalid {
+  border-color: var(--danger) !important;
+}
+.ds-invalid:focus,
+.ds-invalid:focus-visible {
+  /* 聚焦环 0 0 0 3px rgba(200,54,43,.16) */
+  box-shadow: 0 0 0 3px rgba(200, 54, 43, 0.16) !important;
+  outline: none;
+}
+
+/* Element Plus 输入类控件（wrapper 承担描边）：描边换 danger + 聚焦环同款 */
+.el-input__wrapper.ds-invalid,
+.el-textarea__inner.ds-invalid,
+.el-select__wrapper.ds-invalid {
+  box-shadow: 0 0 0 1px var(--danger) inset !important;
+}
+.el-input__wrapper.ds-invalid.is-focus,
+.el-select__wrapper.ds-invalid.is-focus,
+.el-textarea__inner.ds-invalid:focus {
+  box-shadow:
+    0 0 0 1px var(--danger) inset,
+    0 0 0 3px rgba(200, 54, 43, 0.16) !important;
+}
+
+/* 暗色副模：danger 基色为 #f2604f，聚焦环用其低透明版 */
+[data-theme='dark'] .ds-invalid:focus,
+[data-theme='dark'] .ds-invalid:focus-visible {
+  box-shadow: 0 0 0 3px rgba(242, 96, 79, 0.22) !important;
+}
+[data-theme='dark'] .el-input__wrapper.ds-invalid.is-focus,
+[data-theme='dark'] .el-select__wrapper.ds-invalid.is-focus,
+[data-theme='dark'] .el-textarea__inner.ds-invalid:focus {
+  box-shadow:
+    0 0 0 1px var(--danger) inset,
+    0 0 0 3px rgba(242, 96, 79, 0.22) !important;
+}
+
+/* ---------- 三级确认对话框 chrome（§4.4.1；内容样式在 ConfirmDialog.vue 内） ---------- */
+.ds-confirm {
+  --el-dialog-padding-primary: var(--sp-5);
+  --el-dialog-border-radius: var(--r-lg);
+}
+.ds-confirm .el-dialog__header {
+  margin-right: 0;
+  padding-bottom: var(--sp-3);
+}
+.ds-confirm .el-dialog__body {
+  padding-top: 0;
+}
+.ds-confirm .el-dialog__footer {
+  padding-top: var(--sp-3);
+}

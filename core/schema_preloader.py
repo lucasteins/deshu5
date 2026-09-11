@@ -302,7 +302,7 @@ class SchemaPreloader:
                     id INT PRIMARY KEY AUTO_INCREMENT,
                     table_name VARCHAR(128) UNIQUE,
                     table_comment VARCHAR(255),
-                    row_count INT,
+                    row_count BIGINT,
                     column_count INT,
                     doc_text TEXT,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
