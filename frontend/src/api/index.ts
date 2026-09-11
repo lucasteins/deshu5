@@ -3,3 +3,4 @@
 // 自 F1 起随各模块实现补入（api/<module>.ts）。
 export * from './client'
 export * from './qa'
+export * from './stats'

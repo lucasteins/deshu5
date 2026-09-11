@@ -180,11 +180,9 @@ export const NAV_GROUPS: NavGroup[] = [
         subtitle: 'KPI 概览 · 分布与占比 · 工作流运行',
         phase: 'F1.2',
         summary: 'KPI 卡 + ECharts 图表（分布 / 占比）+ 真实 stats API，规划于 F1.2 试点。',
-        tabs: [
-          { key: 'basic', label: '基础数据' },
-          { key: 'kb', label: '知识库' },
-          { key: 'workflow', label: '工作流运行' },
-        ],
+        // F1.2 起按设计稿 §4.5.3 改为**单页看板**（KPI / 折线 / 环形 / 横条 / 热力 / 工作流表），
+        // 原「基础数据 / 知识库 / 工作流运行」三子页签的信息已并入同一页，不再保留页签。
+        tabs: [],
         load: () => import('@/views/stats/StatsView.vue'),
       },
       {
