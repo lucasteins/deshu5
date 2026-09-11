@@ -13,6 +13,9 @@
  * 视觉常量（图层颜色 / 边 / 标签 / 高亮）为旧实现硬编码值，**原样保留**——图谱是
  * 「观测台」深色窗口，节点与标签的浅色、暖橙高亮不随明暗主题切换（对齐皮卡丘
  * 「沿用原样式原功能」拍板）。升级项（锚点缩放 / 框选 / 键盘 / 布局切换）已搁置。
+ *
+ * 增补（2026-09-11 皮卡丘拍板·仅新 UI）：画布高分屏（devicePixelRatio）适配——
+ * 背板按 DPR 放大、绘制/拾取逻辑坐标=CSS 像素；字号/配色/交互不变（非设计变更，static/ 不动）。
  */
 
 export interface ForceNode {
@@ -193,11 +196,12 @@ export function createForceGraph(canvas: HTMLCanvasElement, options: ForceGraphO
 
   /* ---------- 坐标变换 ---------- */
 
+  // 逻辑坐标 = CSS 像素（背板=CSS×DPR，见 draw() 变换）——高分屏适配后不随背板放大
   function worldToScreen(wx: number, wy: number): [number, number] {
-    return [(wx + ox) * scale + canvas.width / 2, (wy + oy) * scale + canvas.height / 2]
+    return [(wx + ox) * scale + canvas.clientWidth / 2, (wy + oy) * scale + canvas.clientHeight / 2]
   }
   function screenToWorld(sx: number, sy: number): [number, number] {
-    return [(sx - canvas.width / 2) / scale - ox, (sy - canvas.height / 2) / scale - oy]
+    return [(sx - canvas.clientWidth / 2) / scale - ox, (sy - canvas.clientHeight / 2) / scale - oy]
   }
 
   /* ---------- 绘制 ---------- */
@@ -209,7 +213,11 @@ export function createForceGraph(canvas: HTMLCanvasElement, options: ForceGraphO
   }
 
   function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    // 高分屏适配（2026-09-11 皮卡丘拍板·仅新 UI）：绘制变换按 DPR 放大，逻辑坐标=CSS 像素；
+    // 隐藏时 clientWidth=0 → 兜底 1，避免 NaN 变换
+    const dpr = canvas.width / (canvas.clientWidth || 1)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, canvas.clientWidth || 1, canvas.clientHeight || 1)
 
     const hasSel = !!sel
     const neighbors = hasSel ? neighborSet(sel as string) : new Set<string>()

@@ -99,8 +99,11 @@ function setupCanvas() {
   const wrap = wrapRef.value
   if (!canvas || !wrap) return
   const width = Math.max(1, wrap.clientWidth)
-  canvas.width = width
-  canvas.height = props.height
+  // 高分屏适配（2026-09-11 皮卡丘拍板·仅新 UI）：背板按 devicePixelRatio 放大，
+  // 样式尺寸维持 CSS 像素——拾取/绘制坐标逻辑不变（forceGraph 侧以 CSS 像素为逻辑坐标）
+  const dpr = window.devicePixelRatio || 1
+  canvas.width = Math.round(width * dpr)
+  canvas.height = Math.round(props.height * dpr)
   canvas.style.width = `${width}px`
   canvas.style.height = `${props.height}px`
 }
