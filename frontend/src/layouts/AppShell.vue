@@ -112,6 +112,10 @@ function onCommand() {
   min-height: 0;
   overflow: auto;
   background: var(--canvas);
+  /* 设计稿 §4.5.3：内容区四周 20px（--sp-5）。box-sizing 收起 padding，
+     避免 flex 子项在 content-box 下溢出出现横向滚动条。 */
+  padding: var(--sp-5);
+  box-sizing: border-box;
 }
 </style>
 

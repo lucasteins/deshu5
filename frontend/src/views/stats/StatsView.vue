@@ -558,6 +558,14 @@ const health = computed(() => {
   grid-template-columns: 1.55fr 1fr;
 }
 
+/* 区块纵向节奏（设计稿 §4.5.3 `.canvasgrid{gap:16px}`）。
+   区块是 DsAsyncSection 内容槽的直接子元素，而该槽是普通 block 容器（无 gap），
+   故由区块自带下边距形成间距；最后一张卡（工作流运行）与其下方的内容区内边距衔接，无需下边距。 */
+.stats__kpis,
+.stats__row {
+  margin-bottom: var(--sp-4);
+}
+
 @media (max-width: 1180px) {
   .stats__kpis {
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

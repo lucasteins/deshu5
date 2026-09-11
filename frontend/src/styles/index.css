@@ -2,6 +2,15 @@
  * 全局基础样式 —— 依赖 tokens.css（设计稿 §4.3 / §4.3.2 / §4.3.4 / §4.3.5）
  * ============================================================ */
 
+/* 盒模型基线（设计稿 mockup 首行即 `*{box-sizing:border-box}`）：
+   设计稿里所有「固定高度 + 内边距」的组件（KPI 卡 126px、卡片头 50px 等）
+   都按 border-box 计算；缺此基线会让这类元素被内边距撑高。 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html {
   /* 中英混排留空隙（§4.3.2） */
   text-spacing-trim: space-first;
