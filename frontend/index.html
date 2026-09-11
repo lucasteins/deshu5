@@ -4,6 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>智能问数训练系统</title>
+    <!-- 主题 / 演示模式启动前落地（防首屏闪烁）；键名与 src/stores/app.ts 保持一致 -->
+    <script>
+      ;(function () {
+        try {
+          var d = document.documentElement
+          var q = new URLSearchParams(location.search)
+          var t = q.get('theme') || localStorage.getItem('deshu5.theme')
+          var m = q.get('mode') || localStorage.getItem('deshu5.mode')
+          if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            d.dataset.theme = 'dark'
+            d.classList.add('dark')
+          } else {
+            d.dataset.theme = 'light'
+          }
+          if (m === 'demo') d.dataset.mode = 'demo'
+        } catch (e) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

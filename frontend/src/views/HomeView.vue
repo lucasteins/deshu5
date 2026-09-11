@@ -46,7 +46,7 @@ const stack = [
 }
 .scaffold__desc {
   margin: 0 0 16px;
-  color: var(--ds-color-text-secondary);
+  color: var(--text-2);
   line-height: 1.7;
 }
 code {
