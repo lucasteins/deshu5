@@ -81,6 +81,27 @@ def create_app() -> Flask:
             'modules': ['settings', 'training', 'resources', 'provision', 'ontology', 'report'],
         })
 
+    # ---- 前端（Vue 3）并行托管：/app（迁移期新旧并存，F3 由皮卡丘拍板切换）----
+    # 依据 03-迁移方案 §3.3/§3.4：
+    #   build base=/app/；/app/assets/* 为静态文件；/app/** 非文件请求兜底回 index.html（SPA fallback）。
+    #   仅新增 /app 路由，不触碰任何 /api 蓝图与旧 UI（/）。
+    frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend', 'dist')
+
+    @app.route('/app/', strict_slashes=False)
+    @app.route('/app/<path:path>')
+    def frontend_app(path: str = 'index.html'):
+        if not os.path.isdir(frontend_dist):
+            return (
+                'frontend/dist 不存在：请先在 frontend/ 目录执行 npm run build',
+                503,
+            )
+        # 路径安全：realpath 归一化后必须落在 frontend/dist 目录内，阻断 ../ 等方式的越权读取
+        target = os.path.realpath(os.path.join(frontend_dist, path))
+        if target.startswith(frontend_dist + os.sep) and os.path.isfile(target):
+            return send_from_directory(frontend_dist, os.path.relpath(target, frontend_dist))
+        # SPA fallback：交由前端路由处理
+        return send_from_directory(frontend_dist, 'index.html')
+
     return app
 
 

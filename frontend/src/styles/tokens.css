@@ -1,0 +1,12 @@
+/* 设计 token —— 占位骨架，F0.2 按设计稿 §4.3（方向 B「霜白仪表」）全量填充：
+ * 色彩 / 字体阶梯 / 间距 / 圆角阴影 / 动效。
+ * 此处仅提供最小可用变量，保证 F0.1 初始页可渲染。
+ */
+:root {
+  --ds-color-bg: #f5f7fa;
+  --ds-color-surface: #ffffff;
+  --ds-color-text: #1f2329;
+  --ds-color-text-secondary: #646a73;
+  --ds-radius-md: 8px;
+  --ds-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+}

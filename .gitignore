@@ -27,3 +27,7 @@ history/
 
 # 外部工具记忆目录（自动再生）
 .workbuddy/
+
+# 前端工程（Vue 3 + Vite）：依赖与构建产物不入库
+frontend/node_modules/
+frontend/dist/
