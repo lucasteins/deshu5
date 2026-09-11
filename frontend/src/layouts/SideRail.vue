@@ -65,7 +65,7 @@ const route = useRoute()
       <div class="avatar" aria-hidden="true">A</div>
       <div v-if="!collapsed" class="who">
         <b>admin</b>
-        <span>数据治理组</span>
+        <span>数据运营组</span>
       </div>
       <el-tooltip content="设置" placement="right" :show-after="300" :disabled="!collapsed">
         <button
