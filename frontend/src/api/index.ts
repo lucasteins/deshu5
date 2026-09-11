@@ -1,3 +1,4 @@
-// 类型化 API 层（按模块划分：training / resources / provision / ontology / report / settings）
-// F0.4 组件基建时填充：axios 统一实例 + 拦截器 + 各模块 API。
-export {}
+// 类型化 API 层出口：axios 统一实例 + 动词糖（03-迁移方案 §3.1）
+// 按模块的端点函数（training / resources / provision / ontology / report / settings）
+// 自 F1 起随各模块实现补入（api/<module>.ts）。
+export * from './client'

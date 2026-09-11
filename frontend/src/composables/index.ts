@@ -1,3 +1,2 @@
-// 组合式函数（useSSE 三流事件类型化等）
-// F0.4 组件基建时填充。
-export {}
+// 组合式函数出口
+export * from './useSSE'

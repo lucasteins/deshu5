@@ -1,2 +1,4 @@
-// 类型定义（SSE 事件 schema / API DTO）——F0.4 起填充（依据 03-迁移方案 §4.3）
-export {}
+// 类型层出口（SSE 事件 schema / API DTO）——03-迁移方案 §3.1
+// 用法：`import type { QaStreamEvent, Paged } from '@/types'`
+export * from './api'
+export * from './sse'
