@@ -138,6 +138,78 @@ class OntologyBuilder:
 
     # ==================== 业务实体层（精炼设计） ====================
 
+    # 表名前缀 → 实体层（域标签聚合兜底用）
+    _LAYER_BY_PREFIX = {'dim': 'master', 'dwd': 'business', 'dws': 'business', 'ads': 'report'}
+
+    def _table_domain_info(self):
+        """治理库业务域标签：{表名: (中文名, domain_l1, domain_l2)} 与 {二级域码: 中文名}。"""
+        info, dom_names = {}, {}
+        try:
+            with self.db.connect_governance() as conn:
+                for t, c, l1, l2 in conn.execute(
+                        'SELECT table_name, table_comment, domain_l1, domain_l2 '
+                        'FROM schema_table_docs'):
+                    info[t] = (c or '', l1 or '', l2 or '')
+                for code, name in conn.execute(
+                        'SELECT domain_code, domain_name FROM business_domains '
+                        'WHERE is_active = 1 AND level = 2'):
+                    dom_names[code] = name
+        except Exception as e:
+            print(f'[WARN] 本体实体归类：治理域标签读取失败: {e}', flush=True)
+        return info, dom_names
+
+    def _reclassify_unmapped(self, ont: Ontology):
+        """Unmapped 兜底实体的二次归类（只处理实体定义未覆盖的表，库中 defs 永远优先）：
+        1. 代码种子映射 default_entity_map()（101 表口径，精确到表名）——并入既有实体，
+           不存在则按种子 (英文名,中文名,layer) 新建；
+        2. 治理库业务域标签（schema_table_docs.domain_l2 + business_domains 中文名）——
+           按二级域聚合成 Domain_* 实体（layer 由表名前缀推导，parent=一级域码）；
+        仍命不中的留在 Unmapped。素材提资新表由此免手工补 defs。
+        """
+        ent = ont.entities.get('Unmapped')
+        if not ent or not ent.member_tables:
+            return
+        from core.ontology.entity_map import default_entity_map
+        emap = default_entity_map()
+        dom_info, dom_names = self._table_domain_info()
+        seed_hit = domain_hit = 0
+        still: List[str] = []
+        for t in ent.member_tables:
+            hit = emap.get(t)
+            if hit:
+                en, zh, layer = hit
+                tgt = ont.entities.get(en)
+                if tgt is None:
+                    tgt = OntologyEntity(name=en, label=zh, layer=layer)
+                    ont.entities[en] = tgt
+                if t not in tgt.member_tables:
+                    tgt.member_tables.append(t)
+                seed_hit += 1
+                continue
+            _comment, l1, l2 = dom_info.get(t, ('', '', ''))
+            if l2:
+                en = f'Domain_{l2}'
+                tgt = ont.entities.get(en)
+                if tgt is None:
+                    tgt = OntologyEntity(
+                        name=en, label=dom_names.get(l2, l2),
+                        layer=self._LAYER_BY_PREFIX.get(t.split('_', 1)[0], 'business'),
+                        parent=l1, comment=f'按治理库二级业务分类 {l2} 自动聚合')
+                    ont.entities[en] = tgt
+                if t not in tgt.member_tables:
+                    tgt.member_tables.append(t)
+                domain_hit += 1
+                continue
+            still.append(t)
+        if still:
+            ent.member_tables = sorted(still)
+        else:
+            del ont.entities['Unmapped']
+        for e in ont.entities.values():
+            e.member_tables = sorted(set(e.member_tables))
+        print(f'[Ontology] Unmapped 二次归类：种子映射 {seed_hit} 表，'
+              f'域标签聚合 {domain_hit} 表，仍未映射 {len(still)} 表', flush=True)
+
     def _build_entities(self, ont: Ontology, entity_defs: Optional[List[dict]]):
         """按实体映射定义聚合物理表为业务实体。
 
@@ -168,7 +240,7 @@ class OntologyBuilder:
                            if t not in mapped and t not in self._relation_tables()]
                 if missing:
                     print(f'[WARN] 本体实体映射未覆盖 {len(missing)} 张表'
-                          f'（归 Unmapped 兜底实体）: {missing[:8]}...', flush=True)
+                          f'（先入 Unmapped，随后二次归类）: {missing[:8]}...', flush=True)
                     unmapped = [t for t in missing if not t.startswith('ads_')]
                     report_new = [t for t in missing if t.startswith('ads_')]
                     for t in report_new:
@@ -190,6 +262,8 @@ class OntologyBuilder:
                         name=name, label=d['label'], layer=d['layer'],
                         parent=d.get('parent', ''), member_tables=d['member_tables'],
                         comment=d.get('comment', ''))
+            # 实体定义未覆盖的新表：种子映射 → 治理域标签 二次归类，避免堆积 Unmapped
+            self._reclassify_unmapped(ont)
         except Exception as e:
             print(f'[WARN] 本体提炼：实体层构建失败: {e}', flush=True)
 

@@ -135,6 +135,9 @@ def provision_execute(run_id):
                 pending = conn.execute(
                     "SELECT COUNT(*) FROM ingest_provenance WHERE run_id = ? AND review_status = 'pending'",
                     (run_id,)).fetchone()[0]
+            # 无需复核（pending=0）的批次：执行完成即删上传副本（数据以 MySQL 为准）
+            if pv.cleanup_upload_if_reviewed(run_id):
+                events.put({'stage': 'cleanup', 'msg': '无待复核项，上传副本已删除（数据以 MySQL 为准）'})
             ok = sum(out['stats']['converted'].values())
             fail = sum(v['fail'] for v in validation.values())
             pv.update_run_stats(run_id, status='done',
@@ -208,6 +211,7 @@ def provision_review_batch_confirm():
                 refresh_schema_caches()
             except Exception as e:
                 print(f"[WARN] Schema 缓存刷新失败: {e}")
+        result['upload_removed'] = pv.cleanup_uploads_for_prov_ids(ids)
         return jsonify({'success': True, **result})
     except Exception as e:
         import traceback
@@ -227,7 +231,8 @@ def provision_review_confirm(prov_id):
             refresh_schema_caches()
         except Exception as e:
             print(f"[WARN] Schema 缓存刷新失败: {e}")
-        return jsonify({'success': True, 'item': updated})
+        removed = pv.cleanup_upload_if_reviewed(updated['run_id'])
+        return jsonify({'success': True, 'item': updated, 'upload_removed': removed})
     except LookupError as e:
         return jsonify({'success': False, 'error': str(e)}), 404
     except Exception as e:
@@ -241,7 +246,8 @@ def provision_review_reject(prov_id):
     """复核否决：不同意变更，保留库内现状（不回填目标表，仅 pending 可否决）。"""
     try:
         updated = pv.reject_provenance(prov_id)
-        return jsonify({'success': True, 'item': updated})
+        removed = pv.cleanup_upload_if_reviewed(updated['run_id'])
+        return jsonify({'success': True, 'item': updated, 'upload_removed': removed})
     except LookupError as e:
         return jsonify({'success': False, 'error': str(e)}), 404
     except ValueError as e:
@@ -263,6 +269,7 @@ def provision_review_batch_reject():
         return jsonify({'success': False, 'error': f'单批最多 2000 条（本次 {len(ids)}）'}), 400
     try:
         result = pv.batch_reject([int(i) for i in ids])
+        result['upload_removed'] = pv.cleanup_uploads_for_prov_ids(ids)
         return jsonify({'success': True, **result})
     except Exception as e:
         import traceback

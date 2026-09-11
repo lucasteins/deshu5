@@ -206,6 +206,19 @@ def _biz_table_cols(db):
     return out
 
 
+def _physical_fk_map(db):
+    """业务库物理外键：{(table, column): (ref_table, ref_column)}（S4 冲突校核依据：
+    与物理外键冲突的治理边导入后也会被合并规则剔除，不如在校验阶段拦截）。"""
+    out = {}
+    with db.connect_business() as conn:
+        for t, c, rt, rc in conn.execute(
+                'SELECT TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME '
+                'FROM information_schema.KEY_COLUMN_USAGE '
+                'WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL'):
+            out[(t, c)] = (rt, rc)
+    return out
+
+
 def _probe_sql(db, sql: str):
     """S5 SQL 试执行（剥尾 LIMIT 后 LIMIT 1）。返回 None=通过，否则错误文本。"""
     if not sql or not re.match(r'(?i)^\s*(SELECT|WITH)\b', sql.strip()):
@@ -240,6 +253,7 @@ def validate(parsed: dict, db=None) -> dict:
     db = db or DatabaseManager()
     l1_map, l2_codes = _domain_maps(db)
     biz_cols = _biz_table_cols(db)
+    fk_map = _physical_fk_map(db)  # S4 物理外键冲突校核
     biz_name = db_profile.current()['business']
     # S2 表清单（S4/S2B 存在性校核用：模板自带的新表将按 S2b 自动建表，降级为 warn）
     s2_tables = {str(_f(rec, '表名')[0]) for rec in parsed.get('S2', {}).get('rows', [])
@@ -415,6 +429,15 @@ def validate(parsed: dict, db=None) -> dict:
                     elif c not in biz_cols[t]:
                         _issue(b, r, 'fail', f'{side}列[{t}.{c}]在业务库 {biz_name} 不存在')
                         bad = True
+            if not bad:
+                # 与物理外键冲突的治理边 fail 拦截（关系合并物理外键为准，导入也只会被剔除；
+                # 反向书写与物理 FK 同向一致时不算冲突）
+                fk = fk_map.get((st, sc))
+                if fk and fk != (tt, tc) and fk_map.get((tt, tc)) != (st, sc):
+                    _issue(b, r, 'fail',
+                           f'与物理外键冲突：{st}.{sc} 物理指向 {fk[0]}.{fk[1]}，'
+                           f'治理边[{st}.{sc} = {tt}.{tc}]不导入（以物理外键为准）')
+                    bad = True
             if not bad:
                 b['ok'] += 1
         result['S4'] = b
@@ -1476,7 +1499,8 @@ def confirm_provenance(prov_id: int, field_value, db=None) -> dict:
             ' FROM ingest_provenance WHERE id = ?', (int(prov_id),))
         r = cursor.fetchone()
         return {'id': r[0], 'target_table': r[1], 'target_key': r[2], 'field_name': r[3],
-                'field_value': r[4], 'source_kind': r[5], 'review_status': r[6]}
+                'field_value': r[4], 'source_kind': r[5], 'review_status': r[6],
+                'run_id': run_id}
 
 
 def reject_provenance(prov_id: int, db=None) -> dict:
@@ -1485,7 +1509,7 @@ def reject_provenance(prov_id: int, db=None) -> dict:
     db = db or DatabaseManager()
     with db.connect_governance() as conn:
         row = conn.execute(
-            'SELECT id, review_status FROM ingest_provenance WHERE id = ?',
+            'SELECT id, review_status, run_id FROM ingest_provenance WHERE id = ?',
             (int(prov_id),)).fetchone()
         if not row:
             raise LookupError(f'溯源记录不存在: {prov_id}')
@@ -1499,7 +1523,8 @@ def reject_provenance(prov_id: int, db=None) -> dict:
             'SELECT id, target_table, target_key, field_name, field_value, source_kind, review_status'
             ' FROM ingest_provenance WHERE id = ?', (int(prov_id),)).fetchone()
         return {'id': r[0], 'target_table': r[1], 'target_key': r[2], 'field_name': r[3],
-                'field_value': r[4], 'source_kind': r[5], 'review_status': r[6]}
+                'field_value': r[4], 'source_kind': r[5], 'review_status': r[6],
+                'run_id': row[2]}
 
 
 def batch_reject(prov_ids, db=None) -> dict:
@@ -1519,11 +1544,48 @@ def batch_reject(prov_ids, db=None) -> dict:
 
 
 def finish_run(run_id: str, db=None) -> dict:
-    """收尾：统计复核状态，run → finished。"""
+    """收尾：统计复核状态，run → finished。复核清零时删除 uploads 副本。"""
     db = db or DatabaseManager()
     with db.connect_governance() as conn:
         pending = conn.execute(
             "SELECT COUNT(*) FROM ingest_provenance WHERE run_id = ? AND review_status = 'pending'",
             (run_id,)).fetchone()[0]
     update_run_stats(run_id, status='finished', stats={'review_rows': pending}, db=db, finished=True)
-    return {'run_id': run_id, 'pending_review': pending, 'status': 'finished'}
+    removed = cleanup_upload_if_reviewed(run_id, db=db)
+    return {'run_id': run_id, 'pending_review': pending, 'status': 'finished',
+            'upload_removed': removed}
+
+
+def cleanup_upload_if_reviewed(run_id: str, db=None) -> bool:
+    """复核队列清零（无 pending）后删除 uploads 副本：数据以 MySQL 为准，xlsx 只是中转。
+    仍有 pending 或文件不存在时不动。返回是否删除。"""
+    db = db or DatabaseManager()
+    with db.connect_governance() as conn:
+        pending = conn.execute(
+            "SELECT COUNT(*) FROM ingest_provenance WHERE run_id = ? AND review_status = 'pending'",
+            (run_id,)).fetchone()[0]
+    if pending:
+        return False
+    path = os.path.join(UPLOAD_DIR, f'{run_id}.xlsx')
+    if not os.path.isfile(path):
+        return False
+    try:
+        os.remove(path)
+        print(f'[provision] run {run_id} 复核清零，上传副本已删除: {path}', flush=True)
+        return True
+    except OSError as e:
+        print(f'[WARN] 上传副本删除失败 {path}: {e}', flush=True)
+        return False
+
+
+def cleanup_uploads_for_prov_ids(prov_ids, db=None) -> int:
+    """批量复核后：涉及的 run 复核清零则删 uploads 副本。返回删除份数。"""
+    if not prov_ids:
+        return 0
+    db = db or DatabaseManager()
+    ph = ', '.join(['?'] * len(prov_ids))
+    with db.connect_governance() as conn:
+        rids = [r[0] for r in conn.execute(
+            f'SELECT DISTINCT run_id FROM ingest_provenance WHERE id IN ({ph})',
+            [int(i) for i in prov_ids]).fetchall()]
+    return sum(1 for rid in rids if cleanup_upload_if_reviewed(rid, db=db))
