@@ -61,9 +61,10 @@ const route = useRoute()
 
     <!-- 底部：用户 + 折叠开关 -->
     <div class="rail-foot">
-      <div class="avatar" aria-hidden="true">李</div>
+      <!-- 登录功能未接入，先以 admin 占位（2026-09-11 皮卡丘目验后调整） -->
+      <div class="avatar" aria-hidden="true">A</div>
       <div v-if="!collapsed" class="who">
-        <b>李云舟</b>
+        <b>admin</b>
         <span>数据治理组</span>
       </div>
       <el-tooltip content="设置" placement="right" :show-after="300" :disabled="!collapsed">

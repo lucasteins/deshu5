@@ -36,11 +36,11 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     component: AppShell,
     children: [
-      // 根路径重定向到首个模块（训练模式）
-      { path: '', redirect: { name: 'training' } },
+      // 根路径重定向到默认模块（统计看板；2026-09-11 皮卡丘目验后由训练模式调整）
+      { path: '', redirect: { name: 'stats' } },
       ...moduleRoutes,
-      // 未匹配路由兜底回首个模块（配合 Flask /app SPA fallback）
-      { path: ':pathMatch(.*)*', redirect: { name: 'training' } },
+      // 未匹配路由兜底回默认模块（配合 Flask 根路径 SPA fallback）
+      { path: ':pathMatch(.*)*', redirect: { name: 'stats' } },
     ],
   },
 ]
