@@ -147,6 +147,10 @@ export function createForceGraph(canvas: HTMLCanvasElement, options: ForceGraphO
       }
     })
     edges.forEach((e) => {
+      // 悬空边防护（W2 集成修复）：端点不在 nodes 的边不进邻接表——后端「表清单」与「关系」
+      // 不同步时会出现这类边（如 ads_grid_t_ts_sg_lc_con_pwrgrid_b 未收录）；否则 physics
+      // 里 nm[nb] 取到 undefined 会中断渲染循环（旧实现同缺陷，此处前端兜底）
+      if (!nm[e.source] || !nm[e.target]) return
       ;(adj[e.source] = adj[e.source] || []).push(e.target)
       ;(adj[e.target] = adj[e.target] || []).push(e.source)
     })
@@ -176,6 +180,7 @@ export function createForceGraph(canvas: HTMLCanvasElement, options: ForceGraphO
       }
       for (const nb of adj[aName] || []) {
         const b = nm[nb]
+        if (!b) continue
         fx -= (a.x - b.x) * att
         fy -= (a.y - b.y) * att
       }
