@@ -9,6 +9,7 @@
  * 全部尺寸 / 颜色走 token（tokens.css），不硬编码。
  */
 import { useRoute } from 'vue-router'
+import { openSettings } from '@/components'
 import { NAV_GROUPS } from './navigation'
 
 defineProps<{ collapsed: boolean }>()
@@ -65,6 +66,17 @@ const route = useRoute()
         <b>李云舟</b>
         <span>数据治理组</span>
       </div>
+      <el-tooltip content="设置" placement="right" :show-after="200" :disabled="!collapsed">
+        <button
+          class="settings-btn"
+          type="button"
+          aria-label="设置"
+          @click="openSettings"
+        >
+          <el-icon><component :is="'Setting'" /></el-icon>
+          <span v-if="!collapsed" class="settings-btn__label">设置</span>
+        </button>
+      </el-tooltip>
       <el-tooltip :content="collapsed ? '展开侧栏' : '折叠侧栏'" placement="right" :show-after="200">
         <button
           class="collapse-btn"
@@ -272,6 +284,39 @@ const route = useRoute()
 .who span {
   font-size: var(--fs-micro);
   color: var(--text-3);
+}
+.settings-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+.settings-btn:hover {
+  background: var(--surface-2);
+  color: var(--text-1);
+}
+.settings-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.settings-btn__label {
+  font-size: var(--fs-body-sm);
+  white-space: nowrap;
+}
+.rail.is-collapsed .settings-btn {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
 }
 .collapse-btn {
   width: 28px;
