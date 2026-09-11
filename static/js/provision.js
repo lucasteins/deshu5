@@ -177,7 +177,7 @@ function pvRenderPriSection(pri, items, cap) {
     const batchBtn = agreeBtn +
         ` <button class="btn btn-secondary btn-sm" onclick="batchReject('${pri}')">批量不同意（保留现状，${items.length} 条）</button>`;
     const capHint = (cap && items.length > cap) ?
-        ` <span class="hint">共 ${items.length} 条，本批显示前 ${cap} 条，处理后可刷新换下一批</span>` : '';
+        ` <span class="hint">共 ${items.length} 条，每批显示前 ${cap} 条，本批全部确认后自动加载下一批</span>` : '';
     const rows = shown.map(it => `<tr id="pv-rev-${it.id}">
         <td>${it.id}</td><td>${pvEsc(it.sheet_name)}</td><td>${it.src_row}</td>
         <td>${pvEsc(it.target_table)}<br><span class="hint">${pvEsc((it.target_key || '').slice(0, 40))}</span></td>
@@ -238,7 +238,7 @@ async function initProvisionPage() {
         const sel = document.getElementById('pv-review-run');
         if (!sel || !withPending.length) return;
         sel.innerHTML = withPending.map(r =>
-            `<option value="${pvEsc(r.run_id)}">${pvEsc(r.file_name || '')}｜${pvEsc(r.run_id)}｜待复核 ${r.pending}</option>`
+            `<option value="${pvEsc(r.run_id)}">${pvEsc(r.file_name || '')}｜${pvEsc(r.run_id)}｜${r.status === 'finished' ? '已收尾·剩' : '处理中·剩'} ${r.pending} 条</option>`
         ).join('');
         // 不覆盖正在进行的当次会话（刚执行完的 run 优先保持）
         if (provisionState.runId && withPending.some(r => r.run_id === provisionState.runId)) {
@@ -278,6 +278,17 @@ async function confirmProv(provId) {
         tr.classList.add('pv-row-confirmed');
         tr.querySelector('td:last-child').innerHTML = '<span class="pv-ok">confirmed</span>';
     }
+    // 分批推进：所在优先级区块本批全部处理（确认或否决）后自动加载下一批（服务端只回 pending，
+    // 已处理自动消失 → 自然换批；全部完成则显示空态）
+    maybeAdvanceBatch(tr);
+}
+
+/** 分批推进公共逻辑：当前区块本批无「未处理」行（未 confirmed 且未 rejected）时自动换批 */
+function maybeAdvanceBatch(tr) {
+    const section = tr ? tr.closest('.pv-pri-section') : null;
+    if (section && !section.querySelector('tr[id^="pv-rev-"]:not(.pv-row-confirmed):not(.pv-row-rejected)') && provisionState.runId) {
+        setTimeout(() => loadReview(provisionState.runId), 350);
+    }
 }
 
 /** 不同意变更：库内保留现状，该行标记 rejected 并淡出 */
@@ -290,12 +301,30 @@ async function rejectProv(provId) {
         tr.classList.add('pv-row-rejected');
         tr.querySelector('td:last-child').innerHTML = '<span class="hint">rejected（保留现状）</span>';
     }
+    // 与 confirmProv 一致：本批全部处理（含否决）后自动加载下一批
+    maybeAdvanceBatch(tr);
 }
 
 async function finishProvision() {
     if (!provisionState.runId) return;
+    // 事前统计当前待复核数，用于确认提示（收尾=结束本批复核；剩余项仍保留可回来继续）
+    let pending = 0;
+    try {
+        const q = await fetch(`/api/provision/${provisionState.runId}/review`);
+        const qd = await q.json();
+        if (qd.success) pending = (qd.items || []).length;
+    } catch (e) { /* 忽略：确认文案按 0 处理 */ }
+    const msg = pending > 0
+        ? `还有 ${pending} 条未确认，确定现在收尾吗？\n（收尾后剩余项仍保留在队列，可随时从上方批次下拉重新选择本批继续处理）`
+        : '本批已全部确认，确定完成收尾？';
+    if (!confirm(msg)) return;
     const resp = await fetch(`/api/provision/${provisionState.runId}/finish`, {method: 'POST'});
     const data = await resp.json();
     if (!data.success) { alert('收尾失败：' + (data.error || resp.status)); return; }
-    alert(`本批次已完成。剩余待复核：${data.pending_review} 条`);
+    if (data.pending_review > 0) {
+        alert(`已收尾。剩余 ${data.pending_review} 条仍保留在复核队列：从上方批次下拉重新选择本批即可继续处理`);
+    } else {
+        alert('✅ 本批已全部确认并完成收尾');
+    }
+    await initProvisionPage();
 }
