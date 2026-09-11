@@ -19,7 +19,7 @@ db/database/*.sql
 db/*.sql
 db/export/
 *.bak.sql
-*.bak
+*.bak*
 data/*_bak_*.sql
 
 # 历史归档（清理移入的无用/测试文件，勿上传）
@@ -40,3 +40,7 @@ app.pid
 前端重构/
 本地适配与修复记录.md
 前端设计优化提示词.md
+
+# 本地设计评审物料（2026-09-11 拍板：不入库，防误 add）
+design-review/
+design-review.rar
