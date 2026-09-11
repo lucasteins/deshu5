@@ -544,6 +544,10 @@ onBeforeUnmount(() => sse.abort())
   gap: 14px;
   overflow-y: auto;
 }
+/* 目验修复：与 QaView 同模式——右栏卡片禁压缩，防矮视口剪裁 */
+.training-side > * {
+  flex: none;
+}
 .tr-card {
   background: var(--surface-1);
   border: 1px solid var(--line);

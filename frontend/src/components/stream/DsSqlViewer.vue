@@ -10,7 +10,7 @@
  *   <DsSqlViewer :sql="result.sql" :typing="true" @done="onRevealDone" />
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { escapeHtml, highlightSql } from './sqlHighlight'
+import { escapeHtml, formatSql, highlightSql } from './sqlHighlight'
 import { toast } from '@/components'
 
 const props = withDefaults(
@@ -34,8 +34,10 @@ const reducedMotion =
 const revealed = ref(0)
 let timer: ReturnType<typeof setInterval> | undefined
 
-const lines = computed(() => props.sql.split('\n'))
-const total = computed(() => props.sql.length)
+/** 展示文本：先经 formatSql 轻量美化（目验修复——子句换行；复制同步使用） */
+const displayText = computed(() => formatSql(props.sql))
+const lines = computed(() => displayText.value.split('\n'))
+const total = computed(() => displayText.value.length)
 
 /** 每行在完整 SQL 串中的起始字符位（含 \n 占位） */
 const lineStarts = computed(() => {
@@ -124,7 +126,7 @@ onBeforeUnmount(stopTimer)
 
 async function copy() {
   try {
-    await navigator.clipboard.writeText(props.sql)
+    await navigator.clipboard.writeText(displayText.value)
     toast.success('SQL 已复制')
   } catch {
     toast.danger({ title: '复制失败', desc: '浏览器未授予剪贴板权限，请手动复制' })

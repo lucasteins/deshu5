@@ -21,6 +21,7 @@ import {
   DsSqlViewer,
   DsStepRail,
   DsThinkingPanel,
+  formatSql,
   toast,
   thinkingToEntry,
   useAutoScroll,
@@ -216,7 +217,7 @@ async function copySql() {
   const r = result.value
   if (!r || !r.sql) return
   try {
-    await navigator.clipboard.writeText(r.sql)
+    await navigator.clipboard.writeText(formatSql(r.sql))
     toast.success('SQL 已复制')
   } catch {
     toast.danger({ title: '复制失败', desc: '浏览器未授予剪贴板权限' })
@@ -329,8 +330,12 @@ onBeforeUnmount(() => {
               {{ thinkingExpanded ? '收起明细' : '展开明细' }}
             </button>
           </div>
-          <DsThinkingPanel v-if="thinkingExpanded" :entries="thinkingEntries" :streams="thinkingStreams" />
-          <DsThinkingPanel v-else :entries="[]" :streams="thinkingStreams" :summary="summary" />
+          <div v-if="thinkingExpanded" class="qa-card-bd">
+            <DsThinkingPanel :entries="thinkingEntries" :streams="thinkingStreams" />
+          </div>
+          <div v-else class="qa-card-bd">
+            <DsThinkingPanel :entries="[]" :streams="thinkingStreams" :summary="summary" />
+          </div>
         </div>
 
         <!-- 生成失败错误条 -->
@@ -461,6 +466,11 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
+}
+/* 目验修复：右栏卡片禁压缩（默认 flex-shrink:1 会在矮视口把卡片压扁，
+   overflow:hidden 再把「执行取数 / 可追溯操作」裁掉且不出现滚动条） */
+.qa-col-right > * {
+  flex: none;
 }
 .qa-card {
   background: var(--surface-1);

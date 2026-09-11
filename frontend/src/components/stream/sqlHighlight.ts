@@ -127,6 +127,182 @@ export function tokenizeSql(sql: string): SqlToken[] {
   return out
 }
 
+/* ================= 轻量 SQL 美化（目验修复：单行 SQL → 子句换行，提升可读性） =================
+ * 启发式：覆盖 SELECT / FROM / JOIN / WHERE / GROUP BY / ORDER BY 等常见子句；
+ * CASE / 窗口函数等保持内联；字符串、注释原样保留；解析失败原样返回（保守兜底）。
+ */
+
+/** 子句关键字：换行顶格（随括号深度缩进） */
+const CLAUSE_WORDS = new Set([
+  'SELECT', 'FROM', 'WHERE', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'EXCEPT', 'INTERSECT',
+  'VALUES', 'SET', 'INSERT', 'UPDATE', 'DELETE',
+])
+
+/** 续行缩进关键字 */
+const INDENT_WORDS = new Set(['AND', 'OR', 'ON'])
+
+/** JOIN 词组起始词（LEFT [OUTER] JOIN / INNER JOIN / …） */
+const JOIN_LEADS = new Set(['JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS'])
+
+const upperOf = (t: RawToken | undefined): string =>
+  t && t.type === 'word' ? t.text.toUpperCase() : ''
+
+/** 非 ASCII 连写字符（CJK 等）：标识符内不插空格（如中文别名「客户编号」） */
+const CJK_CHAR = /[⺀-鿿豈-﫿぀-ヿ가-힯！-｠]/
+
+/** i 处是否 JOIN 词组起点；是则返回词组结束下标（含 JOIN），否则 -1 */
+function joinEnd(sig: RawToken[], i: number): number {
+  if (!JOIN_LEADS.has(upperOf(sig[i]))) return -1
+  if (upperOf(sig[i]) === 'JOIN') return i
+  if (upperOf(sig[i + 1]) === 'JOIN') return i + 1
+  if (upperOf(sig[i + 1]) === 'OUTER' && upperOf(sig[i + 2]) === 'JOIN') return i + 2
+  return -1
+}
+
+/** 轻量 SQL 美化（仅调整空白层，不改变语义） */
+export function formatSql(sql: string): string {
+  if (!sql || !sql.trim()) return sql
+  try {
+    const sig = lex(sql).filter((t) => t.type !== 'ws')
+    if (!sig.length) return sql
+    const lines: string[] = []
+    let line = ''
+    let depth = 0
+    let between = false // BETWEEN … AND 的 AND 不换行
+    let afterDot = false // '.' 后不补空格（schema.table）
+    let windowDepth = -1 // OVER (…) 的括号深度：窗口内保持内联
+    const parenOpenLines: number[] = [] // '(' 时行数快照：跨行括号的 ')' 另起一行
+
+    const pad = (n: number) => '  '.repeat(Math.min(n, 3))
+    function flush() {
+      const l = line.replace(/\s+$/, '')
+      if (l) lines.push(l)
+      line = ''
+      afterDot = false
+    }
+    function start(text: string, extra = 0) {
+      flush()
+      between = false
+      line = pad(depth + extra) + text
+    }
+    function push(text: string) {
+      if (!line) {
+        line = pad(depth) + text
+      } else if (afterDot) {
+        line += text
+        afterDot = false
+      } else {
+        const last = line[line.length - 1]
+        if (CJK_CHAR.test(last) && CJK_CHAR.test(text[0])) line += text
+        else line += last === ' ' || last === '(' ? text : ' ' + text
+      }
+    }
+
+    for (let i = 0; i < sig.length; i++) {
+      const t = sig[i]
+      if (t.type === 'comment') {
+        flush()
+        lines.push(pad(depth) + t.text)
+        continue
+      }
+      if (t.type === 'string' || t.type === 'number') {
+        push(t.text)
+        continue
+      }
+      if (t.type === 'word') {
+        const w = upperOf(t)
+        // GROUP BY / ORDER BY 作一个整体（窗口函数内保持内联）
+        if ((w === 'GROUP' || w === 'ORDER') && upperOf(sig[i + 1]) === 'BY') {
+          if (!(windowDepth !== -1 && depth >= windowDepth)) {
+            start(`${t.text} ${sig[i + 1].text}`)
+            i++
+            continue
+          }
+        }
+        const je = joinEnd(sig, i)
+        if (je >= 0) {
+          start(sig.slice(i, je + 1).map((x) => x.text).join(' '))
+          i = je
+          continue
+        }
+        if (CLAUSE_WORDS.has(w) && !afterDot) {
+          start(t.text)
+          continue
+        }
+        if (INDENT_WORDS.has(w)) {
+          if (w === 'AND' && between) {
+            between = false
+            push(t.text)
+            continue
+          }
+          start(t.text, 1)
+          continue
+        }
+        if (w === 'BETWEEN') between = true
+        push(t.text)
+        continue
+      }
+      // punct
+      const p = t.text
+      if (CJK_CHAR.test(p)) {
+        push(p)
+        continue
+      }
+      if (p === ',') {
+        line = line.replace(/\s+$/, '') + ','
+        continue
+      }
+      if (p === '(') {
+        const prev = sig[i - 1]
+        const prevKw =
+          !!prev && prev.type === 'word' && KEYWORDS.has(upperOf(prev)) && !JOIN_MODIFIERS.has(upperOf(prev))
+        line = line.replace(/\s+$/, '')
+        if (line && prevKw) line += ' '
+        line += '('
+        parenOpenLines.push(lines.length)
+        if (upperOf(prev) === 'OVER') windowDepth = depth + 1
+        depth++
+        continue
+      }
+      if (p === ')') {
+        const spanned = lines.length > (parenOpenLines.pop() ?? lines.length)
+        depth = Math.max(0, depth - 1)
+        if (windowDepth !== -1 && depth < windowDepth) windowDepth = -1
+        if (spanned) start(')')
+        else line = line.replace(/\s+$/, '') + ')'
+        continue
+      }
+      if (p === '.') {
+        line = line.replace(/\s+$/, '') + '.'
+        afterDot = true
+        continue
+      }
+      if (p === ';') {
+        line = line.replace(/\s+$/, '') + ';'
+        flush()
+        continue
+      }
+      // 运算符：两侧留白（'(' / '.' 旁、复合运算符除外）
+      line = line.replace(/\s+$/, '')
+      const last = line[line.length - 1]
+      if (line && /[<>=!]$/.test(last) && /[<>=!]/.test(p)) {
+        line += p
+        continue
+      }
+      if (line && last === p && (p === '|' || p === '&')) {
+        line += p
+        continue
+      }
+      if (line && last !== '(' && last !== '.') line += ' '
+      line += p
+    }
+    flush()
+    return lines.join('\n') || sql
+  } catch {
+    return sql // 保守兜底：解析失败原样展示
+  }
+}
+
 /** 把一整段 SQL 渲染成 HTML（转义 + 着色）；供 v-html 使用 */
 export function highlightSql(sql: string): string {
   const tokens = tokenizeSql(sql)
