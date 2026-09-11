@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 import 'element-plus/dist/index.css'
@@ -22,7 +23,7 @@ for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
 
 app.use(createPinia())
 app.use(router)
-app.use(ElementPlus)
+app.use(ElementPlus, { locale: zhCn })
 
 // 主题 / 演示模式：落地到 <html>（与 index.html 启动脚本配合，避免首屏闪烁）
 useAppStore().initAppearance()
