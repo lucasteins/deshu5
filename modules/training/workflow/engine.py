@@ -63,7 +63,7 @@ DEFAULTS = {
     'fallback': {
         'template': True,
         'draft': True,
-        'v24': True,
+        'v24': getattr(config, 'GEN_FALLBACK_V24', False),   # 现值 false（2026-09-13 起停用，env 可恢复）
     },
     'template_first': {
         'enabled': False,   # 模板前置：签名模板命中且过校验则跳过 LLM 主生成（默认关=现状）

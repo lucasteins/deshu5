@@ -287,7 +287,8 @@ class SQLGenerator:
         llm_success = False
         try:
             result = self._call_llm(prompt, user_question=user_question,
-                                    max_tokens=self._wf['generate']['max_tokens'])
+                                    max_tokens=self._wf['generate']['max_tokens'],
+                                    effort=getattr(config, 'GEN_DRAFT_EFFORT', 'none'))
             raw_content = result['content']
             llm_success = True
         except Exception as e:
@@ -322,7 +323,8 @@ class SQLGenerator:
 请重新生成，严格使用上面列出的表名。"""
             try:
                 result = self._call_llm(retry_prompt, user_question=user_question,
-                                        max_tokens=self._wf['generate']['max_tokens'])
+                                        max_tokens=self._wf['generate']['max_tokens'],
+                                        effort=getattr(config, 'GEN_DRAFT_EFFORT', 'none'))
                 raw_content = result['content']
                 sql = self._extract_sql(raw_content)
                 explanation = self._extract_explanation(raw_content)

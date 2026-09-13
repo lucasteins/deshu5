@@ -172,6 +172,14 @@ class DatabaseManager:
         """)
         return [row[0] for row in cursor.fetchall()]
 
+    def get_table_row_estimates(self, conn) -> Dict[str, int]:
+        """information_schema 的行数估计（InnoDB 采样值，严重失真时需 ANALYZE 校准）。"""
+        cursor = conn.execute("""
+            SELECT table_name, COALESCE(table_rows, 0) FROM information_schema.tables
+            WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'
+        """)
+        return {row[0]: int(row[1] or 0) for row in cursor.fetchall()}
+
     def ping(self) -> dict:
         """连通性检查：四个库各取一次 1。返回 {database: ok/error}。"""
         result = {}

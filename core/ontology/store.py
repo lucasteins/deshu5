@@ -174,8 +174,7 @@ class OntologyStore:
                        base_fingerprint=meta['base_fingerprint'])
         with self.db.connect_ontology() as conn:
             from core.ontology.model import (OntologyClass, OntologyProperty,
-                                             OntologyRelation, OntologyEnumeration,
-                                             OntologyConcept)
+                                             OntologyRelation, OntologyConcept)
             for name, label, kind, comment in conn.execute(
                     'SELECT name, label, kind, comment FROM ontology_classes WHERE version = ?',
                     (v,)):
@@ -196,13 +195,12 @@ class OntologyStore:
                     join_conditions=json.loads(jc or '[]'),
                     business_scenarios=json.loads(bs or '[]'),
                     source=source or 'physical_fk'))
-            for code_name, cn_name, l1, l2, l3, items, refs in conn.execute(
-                    'SELECT code_name, cn_name, domain_l1, domain_l2, domain_l3, items, column_refs '
-                    'FROM ontology_enumerations WHERE version = ?', (v,)):
-                ont.enumerations[code_name] = OntologyEnumeration(
-                    code_name=code_name, cn_name=cn_name or '',
-                    domain_l1=l1 or '', domain_l2=l2 or '', domain_l3=l3 or '',
-                    items=json.loads(items or '[]'), column_refs=json.loads(refs or '[]'))
+            # 码值域直读治理库（治理库 code_values/code_value_items/code_value_column_form
+            # 是唯一权威来源；本体库不再存副本）。properties 已在上方装载，
+            # 故落列（列名 ∩ 码值域名）逻辑可正常执行（见下方 fill_... 调用）。
+        from core.ontology.builder import fill_enumerations_from_governance
+        fill_enumerations_from_governance(self.db, ont)
+        with self.db.connect_ontology() as conn:
             for concept, maps_to, alt in conn.execute(
                     'SELECT concept, maps_to, alt_labels FROM ontology_concepts WHERE version = ?',
                     (v,)):
@@ -246,14 +244,10 @@ class OntologyStore:
                     'VALUES (?, ?, ?, ?, ?, ?)',
                     (r.from_class, r.to_class, json.dumps(r.join_conditions, ensure_ascii=False),
                      json.dumps(r.business_scenarios, ensure_ascii=False), r.source, v))
-            for e in ont.enumerations.values():
-                conn.execute(
-                    'INSERT INTO ontology_enumerations '
-                    '(code_name, cn_name, domain_l1, domain_l2, domain_l3, items, column_refs, version) '
-                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                    (e.code_name, e.cn_name, e.domain_l1, e.domain_l2, e.domain_l3,
-                     json.dumps(e.items, ensure_ascii=False),
-                     json.dumps(e.column_refs, ensure_ascii=False), v))
+            # 码值枚举**不落本体库**：治理库 code_values / code_value_items /
+            # code_value_column_form 是唯一权威来源，load_active() 已改为直读治理库。
+            # 本体库再存一份副本会造成双写不一致（治理库补码后本体副本滞后）。
+            # 表 ontology_enumerations 保留为遗留结构，不再写入。
             for c in ont.concepts.values():
                 conn.execute(
                     'INSERT INTO ontology_concepts (concept, maps_to, alt_labels, version) '

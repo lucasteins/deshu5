@@ -154,7 +154,14 @@ def build_request(messages: list, max_tokens: int = 8000, thinking=None, cfg: di
         # none=关闭思考；low/high/max=思考强度；模型不支持思考参数则完全不发送
         effort_env = os.environ.get('LLM_REASONING_EFFORT', '') or getattr(config, 'LLM_REASONING_EFFORT', '')
         model_lc = (payload['model'] or '').lower()
-        supports_thinking = ('v4' in model_lc) or ('reasoner' in model_lc)
+        # 能力判定：env 显式指定优先；否则按模型名启发（deepseek-flash 默认长跑思维链，需显式下发参数）
+        capable_env = (getattr(config, 'LLM_THINKING_CAPABLE', '') or '').strip().lower()
+        if capable_env in ('1', 'true', 'yes'):
+            supports_thinking = True
+        elif capable_env in ('0', 'false', 'no'):
+            supports_thinking = False
+        else:
+            supports_thinking = ('v4' in model_lc) or ('reasoner' in model_lc) or ('flash' in model_lc)
         if supports_thinking:
             if effort == 'none':
                 payload['thinking'] = {'type': 'disabled'}

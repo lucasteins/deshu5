@@ -17,16 +17,17 @@ class SchemaLoader:
         
         schema = {}
         with self.db.connect_business() as conn:
-            # 获取所有表（information_schema，经 DatabaseManager 统一方法）
+            # 获取所有表 + information_schema 行数估计（经 DatabaseManager 统一方法）
             tables = self.db.get_all_tables(conn)
+            row_estimates = self.db.get_table_row_estimates(conn)
             
             for table in tables:
-                schema[table] = self._load_table_schema(conn, table)
+                schema[table] = self._load_table_schema(conn, table, row_estimates.get(table))
         
         self._schema_cache = schema
         return schema
     
-    def _load_table_schema(self, conn, table: str) -> Dict[str, Any]:
+    def _load_table_schema(self, conn, table: str, row_estimate: Optional[int] = None) -> Dict[str, Any]:
         """加载单张表的Schema（使用 DatabaseManager 的统一方法）"""
         # 字段信息（information_schema）
         columns = self.db.get_table_columns(conn, table)
@@ -57,39 +58,13 @@ class SchemaLoader:
                 'origin': 'c'
             })
         
-        # 数据分布统计（采样）
+        # 行数统计（逐字段 distinct/top_values 采样已删除：无消费方，
+        # 且大表上每列 3 次全表扫描会让启动预热卡数分钟）
         stats = {}
         try:
             cursor = conn.execute(f'SELECT COUNT(*) FROM `{table}`')
             stats['row_count'] = cursor.fetchone()[0]
-            
-            for col in columns:
-                col_name = col['name']
-                try:
-                    cursor = conn.execute(
-                        f'SELECT COUNT(DISTINCT `{col_name}`) FROM `{table}` WHERE `{col_name}` IS NOT NULL'
-                    )
-                    distinct_count = cursor.fetchone()[0]
-                    
-                    cursor = conn.execute(
-                        f'SELECT COUNT(*) FROM `{table}` WHERE `{col_name}` IS NOT NULL'
-                    )
-                    non_null_count = cursor.fetchone()[0]
-                    
-                    cursor = conn.execute(
-                        f'SELECT `{col_name}`, COUNT(*) as cnt FROM `{table}` '
-                        f'WHERE `{col_name}` IS NOT NULL '
-                        f'GROUP BY `{col_name}` ORDER BY cnt DESC LIMIT 5'
-                    )
-                    top_values = [row[0] for row in cursor.fetchall() if row[0] is not None]
-                    
-                    stats[col_name] = {
-                        'distinct_count': distinct_count,
-                        'non_null_count': non_null_count,
-                        'top_values': top_values
-                    }
-                except Exception:
-                    pass
+            self._calibrate_row_estimate(conn, table, row_estimate, stats['row_count'])
         except Exception:
             stats['row_count'] = 0
         
@@ -100,6 +75,26 @@ class SchemaLoader:
             'indexes': idx_list,
             'stats': stats
         }
+    
+    @staticmethod
+    def _calibrate_row_estimate(conn, table: str, estimate: Optional[int], exact: int):
+        """information_schema 行数估计严重失真时自动 ANALYZE 校准。
+
+        information_schema.TABLES.TABLE_ROWS 是 InnoDB 采样估计值、不可直接写入，
+        ANALYZE TABLE（重采样持久化统计）是刷新该估计的标准手段。
+        估计本就接近时 InnoDB 自身 auto_recalc 会维护，此处只兜底严重失真
+        （偏差 >2x 且实际 >1000 行；曾实测 438k 行的表估计仅 320）。
+        """
+        if estimate is None or exact <= 1000:
+            return
+        if 0 < estimate <= exact * 2 and estimate >= exact * 0.5:
+            return
+        try:
+            conn.execute(f'ANALYZE TABLE `{table}`').fetchall()
+            print(f'[schema] 行数估计失真，已 ANALYZE 校准: {table}'
+                  f'（估计 {estimate} → 实际 {exact}）', flush=True)
+        except Exception as e:
+            print(f'[WARN] ANALYZE TABLE {table} 失败: {e}')
     
     def _load_field_comments(self, table: str) -> Dict[str, str]:
         """加载字段中文注释。

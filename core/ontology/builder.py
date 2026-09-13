@@ -20,6 +20,51 @@ from core.ontology.model import (
 )
 
 
+def fill_enumerations_from_governance(db: DatabaseManager, ont: Ontology) -> None:
+    """把治理库的码值域灌入本体对象（**治理库是码值的唯一权威来源**）。
+
+    供两处共用，避免码值在本体库里再存一份副本：
+    - OntologyBuilder._build_enumerations()：构建快照时
+    - OntologyStore.load_active()：加载生效版本时（直读治理库，不读本体库快照）
+
+    依赖 ont.properties 已就绪（落列靠列名 ∩ 码值域名）。
+    """
+    try:
+        with db.connect_governance() as conn:
+            for code_name, cn_name, l1, l2, l3 in conn.execute(
+                    'SELECT code_name, code_cn_name, domain_l1, domain_l2, domain_l3 '
+                    'FROM code_values ORDER BY code_name'):
+                ont.enumerations[code_name] = OntologyEnumeration(
+                    code_name=code_name, cn_name=cn_name or '',
+                    domain_l1=l1 or '', domain_l2=l2 or '', domain_l3=l3 or '')
+            for code_name, item_code, item_name, sort_order in conn.execute(
+                    'SELECT code_name, item_code, item_name, sort_order '
+                    'FROM code_value_items ORDER BY code_name, sort_order'):
+                enum = ont.enumerations.get(code_name)
+                if enum is None or not item_name:
+                    continue  # 孤儿明细（code_values 无定义）跳过，与 RAG 检索行为一致
+                enum.items.append({'code': str(item_code or ''),
+                                   'name': str(item_name),
+                                   'sort': int(sort_order or 0)})
+            # 列落域 + 存储形态
+            form_map = {}
+            try:
+                for t, c, form in conn.execute(
+                        'SELECT table_name, column_name, form FROM code_value_column_form'):
+                    form_map[(t, c)] = form
+            except Exception:
+                pass  # 形态表缺失不阻断
+            # 列名 ∩ 码值域名 自动落列（与 RAGRetriever._load_code_value_index 同规则）
+            for prop in ont.properties:
+                enum = ont.enumerations.get(prop.name)
+                if enum is not None:
+                    enum.column_refs.append({
+                        'table': prop.class_name, 'column': prop.name,
+                        'form': form_map.get((prop.class_name, prop.name), '')})
+    except Exception as e:
+        print(f'[WARN] 本体提炼：码值枚举读取失败: {e}', flush=True)
+
+
 class OntologyBuilder:
     """从底座提炼本体快照。build() 每次全量构建（调用方负责与旧版 diff）。"""
 
@@ -70,40 +115,7 @@ class OntologyBuilder:
     # ==================== 码值枚举 ====================
 
     def _build_enumerations(self, ont: Ontology):
-        try:
-            with self.db.connect_governance() as conn:
-                for code_name, cn_name, l1, l2, l3 in conn.execute(
-                        'SELECT code_name, code_cn_name, domain_l1, domain_l2, domain_l3 '
-                        'FROM code_values ORDER BY code_name'):
-                    ont.enumerations[code_name] = OntologyEnumeration(
-                        code_name=code_name, cn_name=cn_name or '',
-                        domain_l1=l1 or '', domain_l2=l2 or '', domain_l3=l3 or '')
-                for code_name, item_code, item_name, sort_order in conn.execute(
-                        'SELECT code_name, item_code, item_name, sort_order '
-                        'FROM code_value_items ORDER BY code_name, sort_order'):
-                    enum = ont.enumerations.get(code_name)
-                    if enum is None or not item_name:
-                        continue  # 孤儿明细（code_values 无定义）跳过，与 RAG 检索行为一致
-                    enum.items.append({'code': str(item_code or ''),
-                                       'name': str(item_name),
-                                       'sort': int(sort_order or 0)})
-                # 列落域 + 存储形态
-                form_map = {}
-                try:
-                    for t, c, form in conn.execute(
-                            'SELECT table_name, column_name, form FROM code_value_column_form'):
-                        form_map[(t, c)] = form
-                except Exception:
-                    pass  # 形态表缺失不阻断
-                # 列名 ∩ 码值域名 自动落列（与 RAGRetriever._load_code_value_index 同规则）
-                for prop in ont.properties:
-                    enum = ont.enumerations.get(prop.name)
-                    if enum is not None:
-                        enum.column_refs.append({
-                            'table': prop.class_name, 'column': prop.name,
-                            'form': form_map.get((prop.class_name, prop.name), '')})
-        except Exception as e:
-            print(f'[WARN] 本体提炼：码值枚举读取失败: {e}', flush=True)
+        fill_enumerations_from_governance(self.db, ont)
 
     # ==================== 业务概念 ====================
 

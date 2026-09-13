@@ -72,11 +72,13 @@ export function generateSql(payload: {
   return api.post<QaResult>('/generate-sql', payload)
 }
 
-/** 保存为问答对（收束条「加入问答对库」） */
+/** 保存为问答对（收束条「加入问答对库」；SQL 查询模块复用） */
 export function saveQa(payload: {
   question: string
   sql: string
   result_preview: string
+  /** 难度：基础题 / 进阶题（默认）/ 挑战题 */
+  difficulty?: string
 }): Promise<{ success: boolean; message?: string }> {
   return api.post<{ success: boolean; message?: string }>('/save-qa', payload)
 }

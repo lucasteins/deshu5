@@ -89,6 +89,12 @@ AUX_MODEL = os.environ.get('AUX_MODEL', 'deepseek-chat')
 GEN_SQL_AUDIT = os.environ.get('GEN_SQL_AUDIT', 'true').lower() in ('true', '1', 'yes')
 GEN_DRAFT_EFFORT = os.environ.get('GEN_DRAFT_EFFORT', 'none')
 GEN_AUDIT_EFFORT = os.environ.get('GEN_AUDIT_EFFORT', 'low')
+# v2.4 回退通道（意图生成失败时的旧版 LLM 直出通道）：默认停用（2026-09-13），
+# 停用后意图通道失败即报错返回，不再回退；实验对照可 env 置 true 重新开启。
+GEN_FALLBACK_V24 = os.environ.get('GEN_FALLBACK_V24', 'false').lower() in ('true', '1', 'yes')
+# thinking 参数能力判定：空 = 按模型名启发（v4/reasoner/flash）；'1' 强制可下发；'0' 强制不下发。
+# deepseek-flash 实测默认长跑思维链且支持 thinking 参数，故启发纳入 'flash'（2026-09-12）。
+LLM_THINKING_CAPABLE = os.environ.get('LLM_THINKING_CAPABLE', '')
 # 审计段是否开思考：默认 False（2026-09-04 提速：思考型审计实测 4~23s/题且随平台波动，
 # no-think 审计秒级返回；需要更强审计时 env 置 true）
 GEN_AUDIT_THINKING = os.environ.get('GEN_AUDIT_THINKING', 'false').lower() in ('true', '1', 'yes')

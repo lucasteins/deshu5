@@ -85,6 +85,18 @@ export const NAV_GROUPS: NavGroup[] = [
         load: () => import('@/views/qa/QaView.vue'),
       },
       {
+        name: 'sql-lab',
+        path: '/sql-lab',
+        label: 'SQL 查询',
+        icon: 'Search',
+        title: 'SQL 查询',
+        subtitle: '手写 SQL 取数 · 资源目录 · AI 辅助编写',
+        phase: 'F2.6',
+        summary: 'Monaco 编辑器手写 SQL 取数（只读），右栏数据资源目录 + AI 助手（生成/纠错/解释/优化）。',
+        tabs: [],
+        load: () => import('@/views/sql-lab/SqlLabView.vue'),
+      },
+      {
         name: 'qa-lib',
         path: '/qa-lib',
         label: '问答对库',

@@ -36,6 +36,7 @@ frontend/dist/
 .DS_Store
 app.log
 app.pid
+app_boot_test.log
 演示汇报/
 前端重构/
 本地适配与修复记录.md
