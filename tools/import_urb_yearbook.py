@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""2024年城市建设统计年鉴（试点 5 张表）→ database01 标准化窄表入库（skill: ads-table-standard 第七节）
+"""2024年城市建设统计年鉴（试点 5 张表）→ fz01 标准化窄表入库（skill: ads-table-standard 第七节）
 
 转换规则：
 - 多级表头宽表 → 窄表：指标转行（indicator_code/indicator_name/unit/meas_value）
@@ -27,9 +27,9 @@ import config
 XLS_PATH = r'C:\Users\11051\Downloads\2024年城市建设统计年鉴.xls'
 SRC_NAME = '2024年城市建设统计年鉴'
 
-DB_BIZ = 'database01'
-DB_GOV = 'database01_governance'
-DB_ONT = 'database01_ontology'
+DB_BIZ = 'fz01'
+DB_GOV = 'fz01_governance'
+DB_ONT = 'fz01_ontology'
 
 # ==================== 指标定义（列号 → 指标编码/中文名/单位） ====================
 # sheet 3 全国历年城市供水情况（8 列，c0=年份）

@@ -2,7 +2,7 @@
 """本体服务：问数模块的统一本体访问门面（进程级单例）。
 
 职责：
-1. 从 marketing_ontology 库加载已生效版本（内存缓存，不临时抽取）
+1. 从 sc01_ontology 库加载已生效版本（内存缓存，不临时抽取）
 2. 向问数模块输出与 legacy 接口同形状的查询：
    - Schema 面对齐 SchemaPreloader：get_table_names/get_table_comment/get_columns/get_relationships
    - 概念面对齐 keyword_table_map provider：get_concept_table_map(scope)

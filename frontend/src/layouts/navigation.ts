@@ -2,9 +2,9 @@
  * 侧栏 / 顶栏导航配置 —— F0.3 布局壳的唯一信息架构来源。
  *
  * 依据：
- * - 设计稿 §4.4.6「左侧导航」：9 个平铺项按语义分为 3 组
- *   训练（训练模式 / 智能问答 / 问答对库 / 错题集）、资产（数据资源 / 素材提资 / 本体模型）、
- *   分析（统计看板 / 深度分析）。仅新增两个分组标签，不改变任何功能归类。
+ * - 设计稿 §4.4.6「左侧导航」：10 个平铺项按语义分为 3 组
+ *   使用（训练模式 / 智能问答 / SQL 查询）、
+ *   资产（数据资源 / 素材提资 / 本体模型 / 问答对库 / 错题集）、分析（统计看板 / 深度分析）。
  * - 03-迁移方案 §五：各模块规划阶段（phase）用于占位页标注。
  * - 子页签（tabs）沿用旧 UI `static/index.html` 现有信息架构，不新增/不删除。
  *
@@ -53,8 +53,8 @@ export interface NavGroup {
 
 export const NAV_GROUPS: NavGroup[] = [
   {
-    key: 'train',
-    label: '训练',
+    key: 'use',
+    label: '使用',
     items: [
       {
         name: 'training',
@@ -95,32 +95,6 @@ export const NAV_GROUPS: NavGroup[] = [
         summary: 'Monaco 编辑器手写 SQL 取数（只读），右栏数据资源目录 + AI 助手（生成/纠错/解释/优化）。',
         tabs: [],
         load: () => import('@/views/sql-lab/SqlLabView.vue'),
-      },
-      {
-        name: 'qa-lib',
-        path: '/qa-lib',
-        label: '问答对库',
-        icon: 'Collection',
-        count: '3,142',
-        title: '问答对库',
-        subtitle: '问答对管理 · 排序筛选 · 批量编辑',
-        phase: 'F1.1',
-        summary: '表格页全功能（排序 / 筛选 / 分页 / 编辑）+ 真实 API 联调，规划于 F1.1 试点。',
-        tabs: [],
-        load: () => import('@/views/qa-lib/QaLibView.vue'),
-      },
-      {
-        name: 'errors',
-        path: '/errors',
-        label: '错题集',
-        icon: 'Warning',
-        count: '1,286',
-        title: '错题集',
-        subtitle: '错题归因 · 生成 SQL vs 修正 SQL 对比',
-        phase: 'F2.5',
-        summary: '错题集（含对比视图），规划于 F2.5 落地。',
-        tabs: [],
-        load: () => import('@/views/errors/ErrorsView.vue'),
       },
     ],
   },
@@ -176,6 +150,30 @@ export const NAV_GROUPS: NavGroup[] = [
           { key: 'proposals', label: '变更提案' },
         ],
         load: () => import('@/views/ontology/OntologyView.vue'),
+      },
+      {
+        name: 'qa-lib',
+        path: '/qa-lib',
+        label: '问答对库',
+        icon: 'Collection',
+        title: '问答对库',
+        subtitle: '问答对管理 · 排序筛选 · 批量编辑',
+        phase: 'F1.1',
+        summary: '表格页全功能（排序 / 筛选 / 分页 / 编辑）+ 真实 API 联调，规划于 F1.1 试点。',
+        tabs: [],
+        load: () => import('@/views/qa-lib/QaLibView.vue'),
+      },
+      {
+        name: 'errors',
+        path: '/errors',
+        label: '错题集',
+        icon: 'Warning',
+        title: '错题集',
+        subtitle: '错题归因 · 生成 SQL vs 修正 SQL 对比',
+        phase: 'F2.5',
+        summary: '错题集（含对比视图），规划于 F2.5 落地。',
+        tabs: [],
+        load: () => import('@/views/errors/ErrorsView.vue'),
       },
     ],
   },

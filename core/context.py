@@ -51,7 +51,7 @@ def refresh_schema_caches():
 
 
 def switch_database(profile: str) -> dict:
-    """运行时切换数据库档位（生产/暂存），并失效全部缓存对象。
+    """运行时切换数据库档位（生产/仿真），并失效全部缓存对象。
 
     1. db_profile 持久化切换（连接层每次建连读取，即时生效）
     2. SchemaPreloader 清内存态 → 下次 preload 从新库 information_schema 重载（非破坏）

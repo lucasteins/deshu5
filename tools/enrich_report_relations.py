@@ -18,8 +18,8 @@ import pymysql
 
 import config
 
-DB_GOV = 'database01_governance'
-DB_ONT = 'database01_ontology'
+DB_GOV = 'fz01_governance'
+DB_ONT = 'fz01_ontology'
 BRIDGE = 'dim_org_region_map'
 DIM_ORG = 'dim_cst_mgt_org'
 

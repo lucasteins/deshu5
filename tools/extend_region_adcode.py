@@ -23,8 +23,8 @@ import pymysql
 import config
 from tools.build_org_region_map import build_seeds
 
-DB_BIZ = 'database01'
-DB_GOV = 'database01_governance'
+DB_BIZ = 'fz01'
+DB_GOV = 'fz01_governance'
 GB_FILE = r'db/database/pcas_code_gbt2260.json'
 BRIDGE = 'dim_org_region_map'
 

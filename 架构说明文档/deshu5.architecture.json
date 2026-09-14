@@ -12,7 +12,7 @@
       { "id": "report-path", "label": "深度分析报告", "focus": ["spa", "report", "training", "ontology", "core", "mysql"], "note": "planner 借本体实体词表分解子问题；executor 复用训练 SQLGenerator 并发取数，由 LLM 拼装 Markdown 报告。" },
       { "id": "governance-input", "label": "知识与提资入库", "focus": ["spa", "resources", "provision", "mysql"], "note": "9 类治理知识 CRUD 与 xlsx 素材提资，复核后写入治理库。" },
       { "id": "ontology-cycle", "label": "本体生命周期", "focus": ["spa", "ontology", "training", "mysql"], "note": "快照漂移检测生成提案，前端审批换版；问数知识源可在 ontology / legacy 间热切换。" },
-      { "id": "offline-crawl", "label": "离线数据采集", "focus": ["tools", "mysql", "mgop"], "note": "tools 脚本独立于 Flask 进程，经 Playwright 爬取统计局数据写入暂存库。" }
+      { "id": "offline-crawl", "label": "离线数据采集", "focus": ["tools", "mysql", "mgop"], "note": "tools 脚本独立于 Flask 进程，经 Playwright 爬取统计局数据写入仿真库。" }
     ]
   },
   "components": [
@@ -45,11 +45,11 @@
     { "id": "report-reuse", "from": "report", "to": "training", "label": "复用问数引擎", "fromSide": "right", "toSide": "right", "labelAt": [754, 273] },
     { "id": "llm-call", "from": "core", "to": "llm", "label": "OpenAI 兼容 /chat/completions", "variant": "security", "fromSide": "top", "toSide": "left" },
     { "id": "sql-exec", "from": "core", "to": "mysql", "label": "pymysql · 只读 SELECT", "variant": "emphasis" },
-    { "id": "tools-write", "from": "tools", "to": "mysql", "label": "爬取/导入/同步 写暂存库", "variant": "dashed" },
+    { "id": "tools-write", "from": "tools", "to": "mysql", "label": "爬取/导入/同步 写仿真库", "variant": "dashed" },
     { "id": "crawl-mgop", "from": "tools", "to": "mgop", "label": "Playwright · HTTPS", "variant": "dashed", "labelAt": [1260, 611] }
   ],
   "cards": [
-    { "dot": "cyan", "title": "四库底座（MySQL）", "items": ["业务库：35+ 营销共享层表与 ADS 统计窄表，SQL 只读执行目标", "治理库：qa_pairs / 错题 / 码值 / sql_knowledge / 报告模板", "日志库 generation_logs 与本体库 7 表（版本 + 变更提案）", "生产 marketing_* 与暂存 database01* 双档位热切换"] },
+    { "dot": "cyan", "title": "四库底座（MySQL）", "items": ["业务库：35+ 营销共享层表与 ADS 统计窄表，SQL 只读执行目标", "治理库：qa_pairs / 错题 / 码值 / sql_knowledge / 报告模板", "日志库 generation_logs 与本体库 7 表（版本 + 变更提案）", "生产 sc01* 与仿真 fz01* 双档位热切换"] },
     { "dot": "rose", "title": "安全边界", "items": ["应用无认证鉴权，绑定 0.0.0.0，仅适合内网受信部署", "sql_exec 白名单：仅 SELECT/WITH、禁写关键词、自动 LIMIT 50", "LLM 出网携带 Schema 上下文与数据分布统计（数据出域点）", "报告执行器复用训练模块 SQLGenerator，命中标准问答对走 SQL 适配"] }
   ]
 }

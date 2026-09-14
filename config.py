@@ -25,10 +25,10 @@ MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
 MYSQL_PORT = int(os.environ.get('MYSQL_PORT', '3306'))
 MYSQL_USER = os.environ.get('MYSQL_USER', 'root')
 MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', '')  # 从 .env 读取，勿硬编码
-MYSQL_DB_BUSINESS = os.environ.get('MYSQL_DB_BUSINESS', 'marketing_40')      # 业务库
-MYSQL_DB_GOVERNANCE = os.environ.get('MYSQL_DB_GOVERNANCE', 'marketing_governance')  # 治理库
-MYSQL_DB_LOG = os.environ.get('MYSQL_DB_LOG', 'marketing_log')               # 日志库
-MYSQL_DB_ONTOLOGY = os.environ.get('MYSQL_DB_ONTOLOGY', 'marketing_ontology')  # 本体库
+MYSQL_DB_BUSINESS = os.environ.get('MYSQL_DB_BUSINESS', 'sc01')      # 业务库
+MYSQL_DB_GOVERNANCE = os.environ.get('MYSQL_DB_GOVERNANCE', 'sc01_governance')  # 治理库
+MYSQL_DB_LOG = os.environ.get('MYSQL_DB_LOG', 'sc01_log')               # 日志库
+MYSQL_DB_ONTOLOGY = os.environ.get('MYSQL_DB_ONTOLOGY', 'sc01_ontology')  # 本体库
 MYSQL_CHARSET = 'utf8mb4'
 
 # ==================== LLM 兜底默认值（运行时配置走 llm_settings.json）====================

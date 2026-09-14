@@ -2,10 +2,10 @@
 """MySQL 数据访问底座（deshu5 重构版）
 
 四个库的职责划分（与 deshu4 生产库完全一致，存量数据直接可用）：
-- MYSQL_DB_BUSINESS   业务库（marketing_40）：35 张营销共享层表，SQL 只读执行目标
-- MYSQL_DB_GOVERNANCE 治理库（marketing_governance）：问答对/错题/码值/Schema 文档/提资溯源
-- MYSQL_DB_LOG        日志库（marketing_log）：generation_logs 等运行日志
-- MYSQL_DB_ONTOLOGY   本体库（marketing_ontology）：本体模型层存储
+- MYSQL_DB_BUSINESS   业务库（sc01）：35 张营销共享层表，SQL 只读执行目标
+- MYSQL_DB_GOVERNANCE 治理库（sc01_governance）：问答对/错题/码值/Schema 文档/提资溯源
+- MYSQL_DB_LOG        日志库（sc01_log）：generation_logs 等运行日志
+- MYSQL_DB_ONTOLOGY   本体库（sc01_ontology）：本体模型层存储
 
 连接封装说明：代码层沿用 ? 占位符书写习惯，
 由 MySQLConnectionWrapper 统一转换为 MySQL 方言（%s / RAND()）。

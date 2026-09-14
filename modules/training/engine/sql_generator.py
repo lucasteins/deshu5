@@ -83,7 +83,7 @@ class SQLGenerator:
         self._thinking = self._wf['generate']['thinking']  # thinking 模式开关（温度约束见 config 注释）
         self._static_prompt_head = None  # 静态提示词头部缓存：初始化后构建一次，不随每个问题重复组装
 
-        # 知识源（knowledge.source）：ontology → 本体服务（marketing_ontology 已生效版本）；
+        # 知识源（knowledge.source）：ontology → 本体服务（sc01_ontology 已生效版本）；
         # 本体未就绪/异常时自动回退 legacy（SchemaPreloader/治理库直读），问数永不因本体缺失中断
         self._onto = None
         if self._wf.get('knowledge', {}).get('source', 'legacy') == 'ontology':

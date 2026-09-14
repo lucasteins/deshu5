@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
-"""生产库 → 暂存库数据同步（生产优先，冲突以生产库为准）
+"""生产库 sc01 → 仿真库 fz01 数据同步（生产优先，冲突以生产库为准）
 
-- marketing_40        → database01           （业务）
-- marketing_governance → database01_governance（治理）
+- sc01            → fz01              （业务）
+- sc01_governance → fz01_governance   （治理）
+
+（原名 sync_prod_to_database01.py；2026-09-14 库重命名后 database01 = fz01，故更名）
 
 策略：
 - 有主键/唯一键的表：INSERT ... ON DUPLICATE KEY UPDATE（全列以生产值为准）
 - 无任何键的表：追加（无法定义冲突，报告提醒）
 - 目标表缺失时按生产 SHOW CREATE TABLE 建表；缺列时 ALTER ADD（可空）
-- 只读生产库，只写暂存库；逐表 try/except 失败不中断
+- 只读生产库，只写仿真库；逐表 try/except 失败不中断
 """
 import sys
 
@@ -18,8 +20,8 @@ sys.path.insert(0, r'D:\codex\deshu5')
 import config
 
 PAIRS = [
-    ('marketing_40', 'database01'),
-    ('marketing_governance', 'database01_governance'),
+    ('sc01', 'fz01'),
+    ('sc01_governance', 'fz01_governance'),
 ]
 BATCH = 1000
 
@@ -72,9 +74,9 @@ def _keys(conn, db, table):
 
 
 def _align_types(src, dst, src_db, dst_db, table):
-    """列类型对齐：暂存列类型与生产不一致时 MODIFY 为生产类型（生产权威）。
+    """列类型对齐：仿真列类型与生产不一致时 MODIFY 为生产类型（生产权威）。
 
-    保留 AUTO_INCREMENT；转换失败（如 TEXT→数值 数据不合法）保留暂存类型不阻断。
+    保留 AUTO_INCREMENT；转换失败（如 TEXT→数值 数据不合法）保留仿真类型不阻断。
     """
     src_cols = _columns(src, src_db, table)
     dst_cols = _columns(dst, dst_db, table)
@@ -144,7 +146,7 @@ def sync_table(src_db, dst_db, table):
         placeholders = ', '.join(['%s'] * len(cols))
 
         if key_cols:
-            # 精确统计：冲突=生产与暂存键交集
+            # 精确统计：冲突=生产与仿真键交集
             key_sel = ', '.join('`%s`' % c for c in key_cols)
             with src.cursor() as cur:
                 cur.execute(f'SELECT {key_sel} FROM `{table}`')

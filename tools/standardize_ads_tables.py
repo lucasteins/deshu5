@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-"""database01 十七张 ads_ 表标准化迁移（一次性治理脚本，规范见 skill: ads-table-standard）
+"""fz01 十七张 ads_ 表标准化迁移（一次性治理脚本，规范见 skill: ads-table-standard）
 
 迁移内容（backup 先行：db/database/backup_ads_std_20260831_140352.sql）：
 1. 物理层：16 张旧表 → 影子新表（四段式命名 + 公共列 + 类型收敛 + PK/索引 + 注释双写），
    校验后 DROP 旧表；ads_prj_01_ngdis_st2d_trade_dq_1 直接删除（与保留表零重叠，用户确认）
-2. 治理库 database01_governance：schema_table_docs / schema_column_docs 重建 ads 段、
+2. 治理库 fz01_governance：schema_table_docs / schema_column_docs 重建 ads 段、
    schema_relationship_docs / keyword_table_map / ingest_provenance 改名同步、
    qa_pairs.standard_sql 与 report_templates.outline 改写 + 只读验证
-3. 本体库 database01_ontology：entity_defs.member_tables 改名后走 rebuild_proposal + approve
+3. 本体库 fz01_ontology：entity_defs.member_tables 改名后走 rebuild_proposal + approve
 
 用法：
   python tools/standardize_ads_tables.py --dry-run   # 只打印计划，不动库
@@ -23,8 +23,8 @@ import pymysql
 
 import config
 
-DB_BIZ = 'database01'
-DB_GOV = 'database01_governance'
+DB_BIZ = 'fz01'
+DB_GOV = 'fz01_governance'
 
 # 管理单位编码 → 名称（来源：sdxqsh/tpzb 现有 code→name 对）
 ORG_NAME_MAP = {
@@ -626,7 +626,7 @@ def main():
         print('  [skip] dry-run 或 --skip-ontology')
     else:
         # entity_defs：member_tables 改名（被删表从数组剔除）+ name 改名（report 层实体以表名为实体名）
-        ont = connect('database01_ontology')
+        ont = connect('fz01_ontology')
         import json as _json
         name_map = {s['old']: s['new'] for s in TABLES}
         with ont.cursor() as cur:
@@ -671,7 +671,7 @@ def residue_check(biz):
     old_names = [s['old'] for s in TABLES] + DROP_TABLES
     whitelist = {'generation_logs', 'report_runs', 'ontology_proposals'}
     bad = 0
-    conns = [(DB_GOV, gov_conn()), ('database01_ontology', connect('database01_ontology'))]
+    conns = [(DB_GOV, gov_conn()), ('fz01_ontology', connect('fz01_ontology'))]
     for db, conn in conns:
         with conn.cursor() as cur:
             cur.execute("SELECT table_name, column_name FROM information_schema.columns "

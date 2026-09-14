@@ -21,8 +21,8 @@ import pymysql
 
 import config
 
-DB_BIZ = 'database01'
-DB_GOV = 'database01_governance'
+DB_BIZ = 'fz01'
+DB_GOV = 'fz01_governance'
 
 TJJ = ['ads_tjj_gdp_mon', 'ads_tjj_industry_mon', 'ads_tjj_transport_mon', 'ads_tjj_price_mon',
        'ads_tjj_main_mon', 'ads_tjj_energy_mon', 'ads_tjj_retail_mon', 'ads_tjj_foreign_mon',

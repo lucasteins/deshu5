@@ -22,6 +22,12 @@ db/export/
 *.bak*
 data/*_bak_*.sql
 
+# 仿真 skill 运行台账（脚本运行时生成：回滚清单/批量导入记录，非源码，含大体积 .purged）
+*.purged
+skills/deshu5-data-simulation/scripts/manifest/
+# 仿真 skill 运行时状态指针（记录上次台账名，脚本自动重写，勿入库）
+skills/deshu5-data-simulation/scripts/_lastman.txt
+
 # 历史归档（清理移入的无用/测试文件，勿上传）
 history/
 

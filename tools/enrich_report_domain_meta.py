@@ -18,8 +18,8 @@ import pymysql
 
 import config
 
-DB_GOV = 'database01_governance'
-DB_ONT = 'database01_ontology'
+DB_GOV = 'fz01_governance'
+DB_ONT = 'fz01_ontology'
 
 # 域实体 → 主题词（供意图命中；由成员表实际内容提炼）
 DOMAIN_TOPICS = {

@@ -15,8 +15,8 @@
 S6-业务规则（00b-枚举字典、00c-二级业务分类为校验依据，00-填写说明忽略）。
 表头兼容"（必填）/（选填）/✅"标记（匹配时剥离）。
 
-自动建表：执行转换时，S2 清单中当前业务库（db_profile 档位：生产库 marketing_40 /
-暂存库 database01 / 后续新增明细库）尚不存在的表，按 S2b 字段明细 CREATE TABLE
+自动建表：执行转换时，S2 清单中当前业务库（db_profile 档位：生产库 sc01 /
+仿真库 fz01 / 后续新增明细库）尚不存在的表，按 S2b 字段明细 CREATE TABLE
 IF NOT EXISTS（只增不改；表名/列名/数据类型白名单校验后才允许进 DDL）。
 """
 import json
@@ -195,7 +195,7 @@ def _domain_maps(db):
 
 
 def _biz_table_cols(db):
-    """marketing_40 information_schema：{table: set(columns)}（S4/S5 校验依据）。"""
+    """sc01 information_schema：{table: set(columns)}（S4/S5 校验依据）。"""
     out = {}
     with db.connect_business() as conn:
         cursor = conn.execute(
@@ -248,7 +248,7 @@ def _code_value_maps(db):
 
 def validate(parsed: dict, db=None) -> dict:
     """校验（00b/00c 为依据）：层级∈{DIM,DWD,DWS,ADS}、所属域∈10域、二级分类∈business_domains、
-    必填非空、码值明细 code_name⊆码值维度、S4 表/列在 marketing_40 存在、S5 SQL probe 试执行。
+    必填非空、码值明细 code_name⊆码值维度、S4 表/列在 sc01 存在、S5 SQL probe 试执行。
     返回 {sheet_key: {'ok': n, 'warn': n, 'fail': n, 'issues': [{'row','level','msg'}]}}。"""
     db = db or DatabaseManager()
     l1_map, l2_codes = _domain_maps(db)
@@ -636,7 +636,7 @@ def _build_table_ddl(tname, cname, cols, wide_to_text=False):
 
 
 def _create_missing_biz_tables(db, parsed, validation, run_id, P, emit):
-    """自动建表：S2 清单中当前业务库（connect_business 档位，生产/暂存跟随设置页）尚不
+    """自动建表：S2 清单中当前业务库（connect_business 档位，生产/仿真跟随设置页）尚不
     存在的表，按 S2b 字段明细执行 CREATE TABLE IF NOT EXISTS（只增不改：已存在表绝不
     ALTER/DROP）。列序保持模板行序；是否主键=1 合成 PRIMARY KEY。每表写一条 system 溯源
     （field_value=DDL 全文）。返回 {'created': n, 'failed': n}。"""
@@ -995,7 +995,7 @@ def convert_run(run_id: str, parsed: dict, validation: dict,
             P(run_id, 'S5', r, 'qa_pairs', key, 'is_usable', 'direct', c_us or '固定1', is_usable, 'na')
             P(run_id, 'S5', r, 'qa_pairs', key, 'source', 'direct', c_src or '固定赋值', row['source'], 'na')
             P(run_id, 'S5', r, 'qa_pairs', key, 'objects_involved', 'system', 'SQL 提取表名', row['objects_involved'], 'na')
-            P(run_id, 'S5', r, 'qa_pairs', key, 'answer', 'system', 'marketing_40 probe LIMIT5+COUNT', answer, 'na')
+            P(run_id, 'S5', r, 'qa_pairs', key, 'answer', 'system', 'sc01 probe LIMIT5+COUNT', answer, 'na')
             P(run_id, 'S5', r, 'qa_pairs', key, 'domain_l1', 'system', '涉及表 schema_table_docs 标签推导', dl1, 'na')
             P(run_id, 'S5', r, 'qa_pairs', key, 'domain_l2', 'system', '涉及表 schema_table_docs 标签推导', dl2, 'na')
             if keeper in (None, ''):
@@ -1076,7 +1076,7 @@ def _infer_domains(tables, table_domains):
 
 
 def _probe_answer(db, sql: str) -> str:
-    """S5 answer：marketing_40 probe COUNT + LIMIT 5 采样，回填 JSON（与现有 qa_pairs.answer 同构）。"""
+    """S5 answer：sc01 probe COUNT + LIMIT 5 采样，回填 JSON（与现有 qa_pairs.answer 同构）。"""
     out = {'success': False, 'row_count': None, 'headers': [], 'sample_rows': []}
     try:
         base = re.sub(r'\s+LIMIT\s+\d+\s*$', '', sql.rstrip(';').strip(), flags=re.IGNORECASE)

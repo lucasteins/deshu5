@@ -1,0 +1,2336 @@
+{
+ "_source_db": "database01",
+ "_note": "由 profile_db.py 从真实库反向勘探生成，仿真抽取时按此分布拟合",
+ "counties": [
+  {
+   "mgt_org_code": "334010102",
+   "mgt_org_name": "上城供电分公司",
+   "region_adcode": "330102",
+   "region_name": "上城区",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "334010102",
+   "county_name": "上城供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334010104",
+   "mgt_org_name": "拱墅供电分公司",
+   "region_adcode": "330105",
+   "region_name": "拱墅区",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "334010104",
+   "county_name": "拱墅供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334010105",
+   "mgt_org_name": "滨江供电分公司",
+   "region_adcode": "330108",
+   "region_name": "滨江区",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "334010105",
+   "county_name": "滨江供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334010108",
+   "mgt_org_name": "西湖供电分公司",
+   "region_adcode": "330106",
+   "region_name": "西湖区",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "334010108",
+   "county_name": "西湖供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340110",
+   "mgt_org_name": "国网浙江杭州市临平区供电有限公司",
+   "region_adcode": "330113",
+   "region_name": "临平区",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "3340110",
+   "county_name": "国网浙江杭州市临平区供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340120",
+   "mgt_org_name": "国网浙江杭州市钱塘区供电公司",
+   "region_adcode": "330114",
+   "region_name": "钱塘区",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "3340120",
+   "county_name": "国网浙江杭州市钱塘区供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340130",
+   "mgt_org_name": "国网浙江省电力有限公司杭州市萧山区供电公司",
+   "region_adcode": "330109",
+   "region_name": "萧山区",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "3340130",
+   "county_name": "国网浙江省电力有限公司杭州市萧山区供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340140",
+   "mgt_org_name": "国网浙江杭州市余杭区供电有限公司",
+   "region_adcode": "330110",
+   "region_name": "余杭区",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "3340140",
+   "county_name": "国网浙江杭州市余杭区供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340150",
+   "mgt_org_name": "国网浙江桐庐县供电公司",
+   "region_adcode": "330122",
+   "region_name": "桐庐县",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "3340150",
+   "county_name": "国网浙江桐庐县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340160",
+   "mgt_org_name": "国网浙江杭州市临安区供电公司",
+   "region_adcode": "330112",
+   "region_name": "临安区",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "3340160",
+   "county_name": "国网浙江杭州市临安区供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340170",
+   "mgt_org_name": "国网浙江杭州市富阳区供电公司",
+   "region_adcode": "330111",
+   "region_name": "富阳区",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "3340170",
+   "county_name": "国网浙江杭州市富阳区供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340180",
+   "mgt_org_name": "国网浙江建德市供电有限公司",
+   "region_adcode": "330182",
+   "region_name": "建德市",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "3340180",
+   "county_name": "国网浙江建德市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340190",
+   "mgt_org_name": "国网浙江淳安县供电有限公司",
+   "region_adcode": "330127",
+   "region_name": "淳安县",
+   "city_code": "33401",
+   "city_name": "国网浙江省电力有限公司杭州供电公司",
+   "county_code": "3340190",
+   "county_name": "国网浙江淳安县供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334020102",
+   "mgt_org_name": "滨海分公司",
+   "region_adcode": null,
+   "region_name": "滨海区",
+   "city_code": "33402",
+   "city_name": "国网浙江省电力有限公司嘉兴供电公司",
+   "county_code": "334020102",
+   "county_name": "滨海分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334020106",
+   "mgt_org_name": "南湖分公司",
+   "region_adcode": "330402",
+   "region_name": "南湖区",
+   "city_code": "33402",
+   "city_name": "国网浙江省电力有限公司嘉兴供电公司",
+   "county_code": "334020106",
+   "county_name": "南湖分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334020108",
+   "mgt_org_name": "秀洲分公司",
+   "region_adcode": "330411",
+   "region_name": "秀洲区",
+   "city_code": "33402",
+   "city_name": "国网浙江省电力有限公司嘉兴供电公司",
+   "county_code": "334020108",
+   "county_name": "秀洲分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340210",
+   "mgt_org_name": "国网浙江桐乡市供电有限公司",
+   "region_adcode": "330483",
+   "region_name": "桐乡市",
+   "city_code": "33402",
+   "city_name": "国网浙江省电力有限公司嘉兴供电公司",
+   "county_code": "3340210",
+   "county_name": "国网浙江桐乡市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340220",
+   "mgt_org_name": "国网浙江海宁市供电有限公司",
+   "region_adcode": "330481",
+   "region_name": "海宁市",
+   "city_code": "33402",
+   "city_name": "国网浙江省电力有限公司嘉兴供电公司",
+   "county_code": "3340220",
+   "county_name": "国网浙江海宁市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340230",
+   "mgt_org_name": "国网浙江嘉善县供电有限公司",
+   "region_adcode": "330421",
+   "region_name": "嘉善县",
+   "city_code": "33402",
+   "city_name": "国网浙江省电力有限公司嘉兴供电公司",
+   "county_code": "3340230",
+   "county_name": "国网浙江嘉善县供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340240",
+   "mgt_org_name": "国网浙江平湖市供电有限公司",
+   "region_adcode": "330482",
+   "region_name": "平湖市",
+   "city_code": "33402",
+   "city_name": "国网浙江省电力有限公司嘉兴供电公司",
+   "county_code": "3340240",
+   "county_name": "国网浙江平湖市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340250",
+   "mgt_org_name": "国网浙江省电力有限公司海盐县供电公司",
+   "region_adcode": "330424",
+   "region_name": "海盐县",
+   "city_code": "33402",
+   "city_name": "国网浙江省电力有限公司嘉兴供电公司",
+   "county_code": "3340250",
+   "county_name": "国网浙江省电力有限公司海盐县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334030101",
+   "mgt_org_name": "越城供电分公司",
+   "region_adcode": "330602",
+   "region_name": "越城区",
+   "city_code": "33403",
+   "city_name": "国网浙江省电力有限公司绍兴供电公司",
+   "county_code": "334030101",
+   "county_name": "越城供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334030102",
+   "mgt_org_name": "柯桥供电分公司",
+   "region_adcode": "330603",
+   "region_name": "柯桥区",
+   "city_code": "33403",
+   "city_name": "国网浙江省电力有限公司绍兴供电公司",
+   "county_code": "334030102",
+   "county_name": "柯桥供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334030103",
+   "mgt_org_name": "滨海供电分公司",
+   "region_adcode": null,
+   "region_name": "滨海区",
+   "city_code": "33403",
+   "city_name": "国网浙江省电力有限公司绍兴供电公司",
+   "county_code": "334030103",
+   "county_name": "滨海供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340310",
+   "mgt_org_name": "国网浙江诸暨市供电有限公司",
+   "region_adcode": "330681",
+   "region_name": "诸暨市",
+   "city_code": "33403",
+   "city_name": "国网浙江省电力有限公司绍兴供电公司",
+   "county_code": "3340310",
+   "county_name": "国网浙江诸暨市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340320",
+   "mgt_org_name": "国网浙江绍兴市上虞区供电公司",
+   "region_adcode": "330604",
+   "region_name": "上虞区",
+   "city_code": "33403",
+   "city_name": "国网浙江省电力有限公司绍兴供电公司",
+   "county_code": "3340320",
+   "county_name": "国网浙江绍兴市上虞区供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340330",
+   "mgt_org_name": "国网浙江嵊州市供电有限公司",
+   "region_adcode": "330683",
+   "region_name": "嵊州市",
+   "city_code": "33403",
+   "city_name": "国网浙江省电力有限公司绍兴供电公司",
+   "county_code": "3340330",
+   "county_name": "国网浙江嵊州市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340340",
+   "mgt_org_name": "国网浙江新昌县供电公司",
+   "region_adcode": "330624",
+   "region_name": "新昌县",
+   "city_code": "33403",
+   "city_name": "国网浙江省电力有限公司绍兴供电公司",
+   "county_code": "3340340",
+   "county_name": "国网浙江新昌县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334040101",
+   "mgt_org_name": "金华婺城分公司",
+   "region_adcode": "330702",
+   "region_name": "婺城区",
+   "city_code": "33404",
+   "city_name": "国网浙江省电力有限公司金华供电公司",
+   "county_code": "334040101",
+   "county_name": "金华婺城分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334040103",
+   "mgt_org_name": "金华金东分公司",
+   "region_adcode": "330703",
+   "region_name": "金东区",
+   "city_code": "33404",
+   "city_name": "国网浙江省电力有限公司金华供电公司",
+   "county_code": "334040103",
+   "county_name": "金华金东分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340410",
+   "mgt_org_name": "国网浙江义乌市供电公司",
+   "region_adcode": "330782",
+   "region_name": "义乌市",
+   "city_code": "33404",
+   "city_name": "国网浙江省电力有限公司金华供电公司",
+   "county_code": "3340410",
+   "county_name": "国网浙江义乌市供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340420",
+   "mgt_org_name": "国网浙江东阳市供电有限公司",
+   "region_adcode": "330783",
+   "region_name": "东阳市",
+   "city_code": "33404",
+   "city_name": "国网浙江省电力有限公司金华供电公司",
+   "county_code": "3340420",
+   "county_name": "国网浙江东阳市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340430",
+   "mgt_org_name": "国网浙江兰溪市供电有限公司",
+   "region_adcode": "330781",
+   "region_name": "兰溪市",
+   "city_code": "33404",
+   "city_name": "国网浙江省电力有限公司金华供电公司",
+   "county_code": "3340430",
+   "county_name": "国网浙江兰溪市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340440",
+   "mgt_org_name": "国网浙江永康市供电有限公司",
+   "region_adcode": "330784",
+   "region_name": "永康市",
+   "city_code": "33404",
+   "city_name": "国网浙江省电力有限公司金华供电公司",
+   "county_code": "3340440",
+   "county_name": "国网浙江永康市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340450",
+   "mgt_org_name": "国网浙江武义县供电有限公司",
+   "region_adcode": "330723",
+   "region_name": "武义县",
+   "city_code": "33404",
+   "city_name": "国网浙江省电力有限公司金华供电公司",
+   "county_code": "3340450",
+   "county_name": "国网浙江武义县供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340460",
+   "mgt_org_name": "国网浙江浦江县供电公司",
+   "region_adcode": "330726",
+   "region_name": "浦江县",
+   "city_code": "33404",
+   "city_name": "国网浙江省电力有限公司金华供电公司",
+   "county_code": "3340460",
+   "county_name": "国网浙江浦江县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340470",
+   "mgt_org_name": "国网浙江省电力有限公司磐安县供电公司",
+   "region_adcode": "330727",
+   "region_name": "磐安县",
+   "city_code": "33404",
+   "city_name": "国网浙江省电力有限公司金华供电公司",
+   "county_code": "3340470",
+   "county_name": "国网浙江省电力有限公司磐安县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334050101",
+   "mgt_org_name": "国网宁波市海曙供电分公司",
+   "region_adcode": "330203",
+   "region_name": "海曙区",
+   "city_code": "33405",
+   "city_name": "国网浙江省电力有限公司宁波供电公司",
+   "county_code": "334050101",
+   "county_name": "国网宁波市海曙供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334050103",
+   "mgt_org_name": "国网宁波市江北供电分公司",
+   "region_adcode": "330205",
+   "region_name": "江北区",
+   "city_code": "33405",
+   "city_name": "国网浙江省电力有限公司宁波供电公司",
+   "county_code": "334050103",
+   "county_name": "国网宁波市江北供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334050110",
+   "mgt_org_name": "国网浙江省电力有限公司宁波市镇海区供电公司",
+   "region_adcode": "330211",
+   "region_name": "镇海区",
+   "city_code": "33405",
+   "city_name": "国网浙江省电力有限公司宁波供电公司",
+   "county_code": "334050110",
+   "county_name": "国网浙江省电力有限公司宁波市镇海区供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334050120",
+   "mgt_org_name": "国网浙江省电力有限公司宁波市北仑区供电公司",
+   "region_adcode": "330206",
+   "region_name": "北仑区",
+   "city_code": "33405",
+   "city_name": "国网浙江省电力有限公司宁波供电公司",
+   "county_code": "334050120",
+   "county_name": "国网浙江省电力有限公司宁波市北仑区供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334050130",
+   "mgt_org_name": "国网宁波市前湾供电分公司",
+   "region_adcode": null,
+   "region_name": "前湾区",
+   "city_code": "33405",
+   "city_name": "国网浙江省电力有限公司宁波供电公司",
+   "county_code": "334050130",
+   "county_name": "国网宁波市前湾供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340530",
+   "mgt_org_name": "国网浙江宁波市鄞州区供电公司",
+   "region_adcode": "330212",
+   "region_name": "鄞州区",
+   "city_code": "33405",
+   "city_name": "国网浙江省电力有限公司宁波供电公司",
+   "county_code": "3340530",
+   "county_name": "国网浙江宁波市鄞州区供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340540",
+   "mgt_org_name": "国网浙江慈溪市供电有限公司",
+   "region_adcode": "330282",
+   "region_name": "慈溪市",
+   "city_code": "33405",
+   "city_name": "国网浙江省电力有限公司宁波供电公司",
+   "county_code": "3340540",
+   "county_name": "国网浙江慈溪市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340550",
+   "mgt_org_name": "国网浙江余姚市供电公司",
+   "region_adcode": "330281",
+   "region_name": "余姚市",
+   "city_code": "33405",
+   "city_name": "国网浙江省电力有限公司宁波供电公司",
+   "county_code": "3340550",
+   "county_name": "国网浙江余姚市供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340560",
+   "mgt_org_name": "国网浙江省电力有限公司宁波市奉化区供电公司",
+   "region_adcode": "330213",
+   "region_name": "奉化区",
+   "city_code": "33405",
+   "city_name": "国网浙江省电力有限公司宁波供电公司",
+   "county_code": "3340560",
+   "county_name": "国网浙江省电力有限公司宁波市奉化区供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340570",
+   "mgt_org_name": "国网浙江省电力有限公司宁海县供电公司",
+   "region_adcode": "330226",
+   "region_name": "宁海县",
+   "city_code": "33405",
+   "city_name": "国网浙江省电力有限公司宁波供电公司",
+   "county_code": "3340570",
+   "county_name": "国网浙江省电力有限公司宁海县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340580",
+   "mgt_org_name": "国网浙江象山县供电有限公司",
+   "region_adcode": "330225",
+   "region_name": "象山县",
+   "city_code": "33405",
+   "city_name": "国网浙江省电力有限公司宁波供电公司",
+   "county_code": "3340580",
+   "county_name": "国网浙江象山县供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334060101",
+   "mgt_org_name": "国网台州供电公司台州湾新区供电分公司",
+   "region_adcode": null,
+   "region_name": "湾新区区",
+   "city_code": "33406",
+   "city_name": "国网浙江省电力有限公司台州供电公司",
+   "county_code": "334060101",
+   "county_name": "国网台州供电公司台州湾新区供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340610",
+   "mgt_org_name": "国网浙江台州市椒江区供电公司",
+   "region_adcode": "331002",
+   "region_name": "椒江区",
+   "city_code": "33406",
+   "city_name": "国网浙江省电力有限公司台州供电公司",
+   "county_code": "3340610",
+   "county_name": "国网浙江台州市椒江区供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340620",
+   "mgt_org_name": "国网浙江台州市黄岩区供电有限公司",
+   "region_adcode": "331003",
+   "region_name": "黄岩区",
+   "city_code": "33406",
+   "city_name": "国网浙江省电力有限公司台州供电公司",
+   "county_code": "3340620",
+   "county_name": "国网浙江台州市黄岩区供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340630",
+   "mgt_org_name": "国网浙江省电力有限公司台州市路桥区供电公司",
+   "region_adcode": "331004",
+   "region_name": "路桥区",
+   "city_code": "33406",
+   "city_name": "国网浙江省电力有限公司台州供电公司",
+   "county_code": "3340630",
+   "county_name": "国网浙江省电力有限公司台州市路桥区供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340640",
+   "mgt_org_name": "国网浙江三门县供电有限公司",
+   "region_adcode": "331022",
+   "region_name": "三门县",
+   "city_code": "33406",
+   "city_name": "国网浙江省电力有限公司台州供电公司",
+   "county_code": "3340640",
+   "county_name": "国网浙江三门县供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340650",
+   "mgt_org_name": "国网浙江临海市供电有限公司",
+   "region_adcode": "331082",
+   "region_name": "临海市",
+   "city_code": "33406",
+   "city_name": "国网浙江省电力有限公司台州供电公司",
+   "county_code": "3340650",
+   "county_name": "国网浙江临海市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340670",
+   "mgt_org_name": "国网浙江玉环市供电有限公司",
+   "region_adcode": "331083",
+   "region_name": "玉环市",
+   "city_code": "33406",
+   "city_name": "国网浙江省电力有限公司台州供电公司",
+   "county_code": "3340670",
+   "county_name": "国网浙江玉环市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340680",
+   "mgt_org_name": "国网浙江仙居县供电公司",
+   "region_adcode": "331024",
+   "region_name": "仙居县",
+   "city_code": "33406",
+   "city_name": "国网浙江省电力有限公司台州供电公司",
+   "county_code": "3340680",
+   "county_name": "国网浙江仙居县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340690",
+   "mgt_org_name": "国网浙江天台县供电有限公司",
+   "region_adcode": "331023",
+   "region_name": "天台县",
+   "city_code": "33406",
+   "city_name": "国网浙江省电力有限公司台州供电公司",
+   "county_code": "3340690",
+   "county_name": "国网浙江天台县供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334070101",
+   "mgt_org_name": "国网浙江丽水供电公司南城供电分公司",
+   "region_adcode": null,
+   "region_name": "南城区",
+   "city_code": "33407",
+   "city_name": "国网浙江省电力有限公司丽水供电公司",
+   "county_code": "334070101",
+   "county_name": "国网浙江丽水供电公司南城供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340710",
+   "mgt_org_name": "国网浙江丽水市莲都区供电有限公司",
+   "region_adcode": "331102",
+   "region_name": "莲都区",
+   "city_code": "33407",
+   "city_name": "国网浙江省电力有限公司丽水供电公司",
+   "county_code": "3340710",
+   "county_name": "国网浙江丽水市莲都区供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340720",
+   "mgt_org_name": "国网浙江云和县供电有限公司",
+   "region_adcode": "331125",
+   "region_name": "云和县",
+   "city_code": "33407",
+   "city_name": "国网浙江省电力有限公司丽水供电公司",
+   "county_code": "3340720",
+   "county_name": "国网浙江云和县供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340730",
+   "mgt_org_name": "国网浙江省电力有限公司景宁县供电公司",
+   "region_adcode": "331127",
+   "region_name": "景宁畲族自治县",
+   "city_code": "33407",
+   "city_name": "国网浙江省电力有限公司丽水供电公司",
+   "county_code": "3340730",
+   "county_name": "国网浙江省电力有限公司景宁县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340740",
+   "mgt_org_name": "国网浙江省电力有限公司遂昌县供电公司",
+   "region_adcode": "331123",
+   "region_name": "遂昌县",
+   "city_code": "33407",
+   "city_name": "国网浙江省电力有限公司丽水供电公司",
+   "county_code": "3340740",
+   "county_name": "国网浙江省电力有限公司遂昌县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340750",
+   "mgt_org_name": "国网浙江省电力有限公司松阳县供电公司",
+   "region_adcode": "331124",
+   "region_name": "松阳县",
+   "city_code": "33407",
+   "city_name": "国网浙江省电力有限公司丽水供电公司",
+   "county_code": "3340750",
+   "county_name": "国网浙江省电力有限公司松阳县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340760",
+   "mgt_org_name": "国网浙江省电力公司龙泉市供电公司",
+   "region_adcode": "331181",
+   "region_name": "龙泉市",
+   "city_code": "33407",
+   "city_name": "国网浙江省电力有限公司丽水供电公司",
+   "county_code": "3340760",
+   "county_name": "国网浙江省电力公司龙泉市供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340770",
+   "mgt_org_name": "国网浙江省电力有限公司庆元县供电公司",
+   "region_adcode": "331126",
+   "region_name": "庆元县",
+   "city_code": "33407",
+   "city_name": "国网浙江省电力有限公司丽水供电公司",
+   "county_code": "3340770",
+   "county_name": "国网浙江省电力有限公司庆元县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340780",
+   "mgt_org_name": "国网浙江缙云县供电公司",
+   "region_adcode": "331122",
+   "region_name": "缙云县",
+   "city_code": "33407",
+   "city_name": "国网浙江省电力有限公司丽水供电公司",
+   "county_code": "3340780",
+   "county_name": "国网浙江缙云县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340790",
+   "mgt_org_name": "国网浙江青田县供电有限公司",
+   "region_adcode": "331121",
+   "region_name": "青田县",
+   "city_code": "33407",
+   "city_name": "国网浙江省电力有限公司丽水供电公司",
+   "county_code": "3340790",
+   "county_name": "国网浙江青田县供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334080101",
+   "mgt_org_name": "国网浙江湖州吴兴供电分公司",
+   "region_adcode": "330502",
+   "region_name": "吴兴区",
+   "city_code": "33408",
+   "city_name": "国网浙江省电力有限公司湖州供电公司",
+   "county_code": "334080101",
+   "county_name": "国网浙江湖州吴兴供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334080102",
+   "mgt_org_name": "国网浙江湖州南浔供电分公司",
+   "region_adcode": "330503",
+   "region_name": "南浔区",
+   "city_code": "33408",
+   "city_name": "国网浙江省电力有限公司湖州供电公司",
+   "county_code": "334080102",
+   "county_name": "国网浙江湖州南浔供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334080103",
+   "mgt_org_name": "国网浙江湖州南太湖新区供电分公司",
+   "region_adcode": null,
+   "region_name": "南太湖新区区",
+   "city_code": "33408",
+   "city_name": "国网浙江省电力有限公司湖州供电公司",
+   "county_code": "334080103",
+   "county_name": "国网浙江湖州南太湖新区供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340810",
+   "mgt_org_name": "国网浙江省电力有限公司德清县供电公司",
+   "region_adcode": "330521",
+   "region_name": "德清县",
+   "city_code": "33408",
+   "city_name": "国网浙江省电力有限公司湖州供电公司",
+   "county_code": "3340810",
+   "county_name": "国网浙江省电力有限公司德清县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340820",
+   "mgt_org_name": "国网浙江省电力有限公司安吉县供电公司",
+   "region_adcode": "330523",
+   "region_name": "安吉县",
+   "city_code": "33408",
+   "city_name": "国网浙江省电力有限公司湖州供电公司",
+   "county_code": "3340820",
+   "county_name": "国网浙江省电力有限公司安吉县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340830",
+   "mgt_org_name": "国网浙江省电力有限公司长兴县供电公司",
+   "region_adcode": "330522",
+   "region_name": "长兴县",
+   "city_code": "33408",
+   "city_name": "国网浙江省电力有限公司湖州供电公司",
+   "county_code": "3340830",
+   "county_name": "国网浙江省电力有限公司长兴县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340902",
+   "mgt_org_name": "衢州柯城供电分公司",
+   "region_adcode": "330802",
+   "region_name": "柯城区",
+   "city_code": "33409",
+   "city_name": "国网浙江省电力有限公司衢州供电公司",
+   "county_code": "3340902",
+   "county_name": "衢州柯城供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340903",
+   "mgt_org_name": "衢州衢江供电分公司",
+   "region_adcode": "330803",
+   "region_name": "衢江区",
+   "city_code": "33409",
+   "city_name": "国网浙江省电力有限公司衢州供电公司",
+   "county_code": "3340903",
+   "county_name": "衢州衢江供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340910",
+   "mgt_org_name": "国网浙江省电力有限公司江山市供电公司",
+   "region_adcode": "330881",
+   "region_name": "江山市",
+   "city_code": "33409",
+   "city_name": "国网浙江省电力有限公司衢州供电公司",
+   "county_code": "3340910",
+   "county_name": "国网浙江省电力有限公司江山市供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340920",
+   "mgt_org_name": "国网浙江龙游县供电有限公司",
+   "region_adcode": "330825",
+   "region_name": "龙游县",
+   "city_code": "33409",
+   "city_name": "国网浙江省电力有限公司衢州供电公司",
+   "county_code": "3340920",
+   "county_name": "国网浙江龙游县供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340930",
+   "mgt_org_name": "国网浙江常山县供电有限公司",
+   "region_adcode": "330822",
+   "region_name": "常山县",
+   "city_code": "33409",
+   "city_name": "国网浙江省电力有限公司衢州供电公司",
+   "county_code": "3340930",
+   "county_name": "国网浙江常山县供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3340940",
+   "mgt_org_name": "国网浙江开化县供电有限公司",
+   "region_adcode": "330824",
+   "region_name": "开化县",
+   "city_code": "33409",
+   "city_name": "国网浙江省电力有限公司衢州供电公司",
+   "county_code": "3340940",
+   "county_name": "国网浙江开化县供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334100101",
+   "mgt_org_name": "国网温州供电公司鹿城供电分公司",
+   "region_adcode": "330302",
+   "region_name": "鹿城区",
+   "city_code": "33410",
+   "city_name": "国网浙江省电力有限公司温州供电公司",
+   "county_code": "334100101",
+   "county_name": "国网温州供电公司鹿城供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334100102",
+   "mgt_org_name": "国网温州供电公司瓯海供电分公司",
+   "region_adcode": "330304",
+   "region_name": "瓯海区",
+   "city_code": "33410",
+   "city_name": "国网浙江省电力有限公司温州供电公司",
+   "county_code": "334100102",
+   "county_name": "国网温州供电公司瓯海供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334100103",
+   "mgt_org_name": "国网温州供电公司龙湾供电分公司",
+   "region_adcode": "330303",
+   "region_name": "龙湾区",
+   "city_code": "33410",
+   "city_name": "国网浙江省电力有限公司温州供电公司",
+   "county_code": "334100103",
+   "county_name": "国网温州供电公司龙湾供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3341010",
+   "mgt_org_name": "国网浙江瑞安市供电有限责任公司",
+   "region_adcode": "330381",
+   "region_name": "瑞安市",
+   "city_code": "33410",
+   "city_name": "国网浙江省电力有限公司温州供电公司",
+   "county_code": "3341010",
+   "county_name": "国网浙江瑞安市供电有限责任公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3341020",
+   "mgt_org_name": "国网浙江省电力有限公司平阳县供电公司",
+   "region_adcode": "330326",
+   "region_name": "平阳县",
+   "city_code": "33410",
+   "city_name": "国网浙江省电力有限公司温州供电公司",
+   "county_code": "3341020",
+   "county_name": "国网浙江省电力有限公司平阳县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3341030",
+   "mgt_org_name": "国网浙江苍南县供电有限责任公司",
+   "region_adcode": "330327",
+   "region_name": "苍南县",
+   "city_code": "33410",
+   "city_name": "国网浙江省电力有限公司温州供电公司",
+   "county_code": "3341030",
+   "county_name": "国网浙江苍南县供电有限责任公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3341040",
+   "mgt_org_name": "国网浙江乐清市供电有限公司",
+   "region_adcode": "330382",
+   "region_name": "乐清市",
+   "city_code": "33410",
+   "city_name": "国网浙江省电力有限公司温州供电公司",
+   "county_code": "3341040",
+   "county_name": "国网浙江乐清市供电有限公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3341050",
+   "mgt_org_name": "国网浙江省电力有限公司温州市洞头区供电公司",
+   "region_adcode": "330305",
+   "region_name": "洞头区",
+   "city_code": "33410",
+   "city_name": "国网浙江省电力有限公司温州供电公司",
+   "county_code": "3341050",
+   "county_name": "国网浙江省电力有限公司温州市洞头区供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3341060",
+   "mgt_org_name": "国网浙江省电力有限公司泰顺县供电公司",
+   "region_adcode": "330329",
+   "region_name": "泰顺县",
+   "city_code": "33410",
+   "city_name": "国网浙江省电力有限公司温州供电公司",
+   "county_code": "3341060",
+   "county_name": "国网浙江省电力有限公司泰顺县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3341070",
+   "mgt_org_name": "国网浙江省电力有限公司永嘉县供电公司",
+   "region_adcode": "330324",
+   "region_name": "永嘉县",
+   "city_code": "33410",
+   "city_name": "国网浙江省电力有限公司温州供电公司",
+   "county_code": "3341070",
+   "county_name": "国网浙江省电力有限公司永嘉县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3341080",
+   "mgt_org_name": "国网浙江省电力有限公司文成县供电公司",
+   "region_adcode": "330328",
+   "region_name": "文成县",
+   "city_code": "33410",
+   "city_name": "国网浙江省电力有限公司温州供电公司",
+   "county_code": "3341080",
+   "county_name": "国网浙江省电力有限公司文成县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3341090",
+   "mgt_org_name": "国网浙江省电力有限公司龙港市供电公司",
+   "region_adcode": "330383",
+   "region_name": "龙港市",
+   "city_code": "33410",
+   "city_name": "国网浙江省电力有限公司温州供电公司",
+   "county_code": "3341090",
+   "county_name": "国网浙江省电力有限公司龙港市供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334110101",
+   "mgt_org_name": "定海供电分公司",
+   "region_adcode": "330902",
+   "region_name": "定海区",
+   "city_code": "33411",
+   "city_name": "国网浙江省电力有限公司舟山供电公司",
+   "county_code": "334110101",
+   "county_name": "定海供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334110102",
+   "mgt_org_name": "普陀供电分公司",
+   "region_adcode": "330903",
+   "region_name": "普陀区",
+   "city_code": "33411",
+   "city_name": "国网浙江省电力有限公司舟山供电公司",
+   "county_code": "334110102",
+   "county_name": "普陀供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "334110103",
+   "mgt_org_name": "新城供电分公司",
+   "region_adcode": null,
+   "region_name": "新城区",
+   "city_code": "33411",
+   "city_name": "国网浙江省电力有限公司舟山供电公司",
+   "county_code": "334110103",
+   "county_name": "新城供电分公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3341110",
+   "mgt_org_name": "国网浙江省电力有限公司岱山县供电公司",
+   "region_adcode": "330921",
+   "region_name": "岱山县",
+   "city_code": "33411",
+   "city_name": "国网浙江省电力有限公司舟山供电公司",
+   "county_code": "3341110",
+   "county_name": "国网浙江省电力有限公司岱山县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  },
+  {
+   "mgt_org_code": "3341120",
+   "mgt_org_name": "国网浙江省电力公司嵊泗县供电公司",
+   "region_adcode": "330922",
+   "region_name": "嵊泗县",
+   "city_code": "33411",
+   "city_name": "国网浙江省电力有限公司舟山供电公司",
+   "county_code": "3341120",
+   "county_name": "国网浙江省电力公司嵊泗县供电公司",
+   "province_code": "33101",
+   "province_name": "国网浙江省电力有限公司"
+  }
+ ],
+ "county_count": 96,
+ "voltage": {
+  "cntrl_sta": [
+   {
+    "v": "交流110kV",
+    "n": 8,
+    "p": 0.8889
+   },
+   {
+    "v": "交流35kV",
+    "n": 1,
+    "p": 0.1111
+   }
+  ],
+  "pipeline": [
+   {
+    "v": "交流10kV",
+    "n": 15,
+    "p": 1.0
+   }
+  ],
+  "dist_sta": [
+   {
+    "v": "交流10kV",
+    "n": 14,
+    "p": 1.0
+   }
+  ],
+  "adj_volt_dev_primary": [
+   {
+    "v": "交流10kV",
+    "n": 50,
+    "p": 1.0
+   }
+  ],
+  "adj_volt_dev_secondary": [
+   {
+    "v": "交流380V",
+    "n": 27,
+    "p": 0.54
+   },
+   {
+    "v": "交流10kV",
+    "n": 23,
+    "p": 0.46
+   }
+  ]
+ },
+ "capacity": {
+  "cntrl_sta_kva": [
+   {
+    "v": 100000.0,
+    "n": 4,
+    "p": 0.5
+   },
+   {
+    "v": 40000.0,
+    "n": 1,
+    "p": 0.125
+   },
+   {
+    "v": 120000.0,
+    "n": 1,
+    "p": 0.125
+   },
+   {
+    "v": 80000.0,
+    "n": 1,
+    "p": 0.125
+   },
+   {
+    "v": 130000.0,
+    "n": 1,
+    "p": 0.125
+   }
+  ],
+  "dist_sta_kva": [
+   {
+    "v": 5350.0,
+    "n": 2,
+    "p": 0.1538
+   },
+   {
+    "v": 5650.0,
+    "n": 2,
+    "p": 0.1538
+   },
+   {
+    "v": 2850.0,
+    "n": 2,
+    "p": 0.1538
+   },
+   {
+    "v": 100.0,
+    "n": 1,
+    "p": 0.0769
+   },
+   {
+    "v": 400.0,
+    "n": 1,
+    "p": 0.0769
+   },
+   {
+    "v": 500.0,
+    "n": 1,
+    "p": 0.0769
+   },
+   {
+    "v": 800.0,
+    "n": 1,
+    "p": 0.0769
+   },
+   {
+    "v": 630.0,
+    "n": 1,
+    "p": 0.0769
+   },
+   {
+    "v": 1800.0,
+    "n": 1,
+    "p": 0.0769
+   },
+   {
+    "v": 750.0,
+    "n": 1,
+    "p": 0.0769
+   }
+  ],
+  "transformer_kva": [
+   {
+    "v": 1250.0,
+    "n": 16,
+    "p": 0.32
+   },
+   {
+    "v": 800.0,
+    "n": 15,
+    "p": 0.3
+   },
+   {
+    "v": 1000.0,
+    "n": 8,
+    "p": 0.16
+   },
+   {
+    "v": 1600.0,
+    "n": 4,
+    "p": 0.08
+   },
+   {
+    "v": 500.0,
+    "n": 2,
+    "p": 0.04
+   },
+   {
+    "v": 100.0,
+    "n": 1,
+    "p": 0.02
+   },
+   {
+    "v": 160.0,
+    "n": 1,
+    "p": 0.02
+   },
+   {
+    "v": 400.0,
+    "n": 1,
+    "p": 0.02
+   },
+   {
+    "v": 630.0,
+    "n": 1,
+    "p": 0.02
+   },
+   {
+    "v": 250.0,
+    "n": 1,
+    "p": 0.02
+   }
+  ]
+ },
+ "flags": {
+  "cntrl_sta_status": [
+   {
+    "v": "运行",
+    "n": 7,
+    "p": 0.7778
+   },
+   {
+    "v": "拆除",
+    "n": 2,
+    "p": 0.2222
+   }
+  ],
+  "pipeline_run_stat": [
+   {
+    "v": "运行",
+    "n": 11,
+    "p": 0.7333
+   },
+   {
+    "v": "拆除",
+    "n": 3,
+    "p": 0.2
+   },
+   {
+    "v": "待装",
+    "n": 1,
+    "p": 0.0667
+   }
+  ],
+  "pipeline_publ_clg": [
+   {
+    "v": "公线",
+    "n": 12,
+    "p": 0.8
+   },
+   {
+    "v": "专线",
+    "n": 3,
+    "p": 0.2
+   }
+  ],
+  "dist_sta_publ_clg": [
+   {
+    "v": "专变",
+    "n": 11,
+    "p": 0.7857
+   },
+   {
+    "v": "公变",
+    "n": 3,
+    "p": 0.2143
+   }
+  ],
+  "dist_sta_status": [
+   {
+    "v": "运行",
+    "n": 12,
+    "p": 0.8571
+   },
+   {
+    "v": "拆除",
+    "n": 2,
+    "p": 0.1429
+   }
+  ],
+  "adj_volt_dev_type": [
+   {
+    "v": "变压器",
+    "n": 50,
+    "p": 1.0
+   }
+  ],
+  "srv_kind": [
+   {
+    "v": "电类",
+    "n": 9,
+    "p": 1.0
+   }
+  ]
+ },
+ "customer": {
+  "cust_cls": [
+   {
+    "v": "低压非居民",
+    "n": 12,
+    "p": 0.375
+   },
+   {
+    "v": "低压居民",
+    "n": 11,
+    "p": 0.3438
+   },
+   {
+    "v": "高压",
+    "n": 9,
+    "p": 0.2812
+   }
+  ],
+  "ec_categ": [
+   {
+    "v": "商业用电",
+    "n": 12,
+    "p": 0.375
+   },
+   {
+    "v": "城镇居民生活用电",
+    "n": 12,
+    "p": 0.375
+   },
+   {
+    "v": "非工业",
+    "n": 8,
+    "p": 0.25
+   }
+  ],
+  "cust_volt": [
+   {
+    "v": "交流220V",
+    "n": 17,
+    "p": 0.5312
+   },
+   {
+    "v": "交流10kV",
+    "n": 9,
+    "p": 0.2812
+   },
+   {
+    "v": "交流380V",
+    "n": 6,
+    "p": 0.1875
+   }
+  ],
+  "prc_code": [
+   {
+    "v": "1077",
+    "n": 8,
+    "p": 0.25
+   },
+   {
+    "v": "1067",
+    "n": 8,
+    "p": 0.25
+   },
+   {
+    "v": "1084",
+    "n": 5,
+    "p": 0.1562
+   },
+   {
+    "v": "1070",
+    "n": 3,
+    "p": 0.0938
+   },
+   {
+    "v": "1090",
+    "n": 3,
+    "p": 0.0938
+   },
+   {
+    "v": "1073",
+    "n": 2,
+    "p": 0.0625
+   },
+   {
+    "v": "1089",
+    "n": 1,
+    "p": 0.0312
+   },
+   {
+    "v": "1108",
+    "n": 1,
+    "p": 0.0312
+   },
+   {
+    "v": "2147483647",
+    "n": 1,
+    "p": 0.0312
+   }
+  ],
+  "ctlg_prc_name": [
+   {
+    "v": "202112一般工商业及其他：不满1千伏：单费率：单一制",
+    "n": 9,
+    "p": 0.2812
+   },
+   {
+    "v": "202112居民生活(一户一表)：不满1千伏：两费率：单一制",
+    "n": 8,
+    "p": 0.25
+   },
+   {
+    "v": "202112一般工商业及其他：1-10千伏：三费率：单一制",
+    "n": 5,
+    "p": 0.1562
+   },
+   {
+    "v": "202112居民生活(一户一表)：不满1千伏：单费率：单一制",
+    "n": 3,
+    "p": 0.0938
+   },
+   {
+    "v": "202112一般工商业及其他：1-10千伏：单费率：单一制",
+    "n": 3,
+    "p": 0.0938
+   },
+   {
+    "v": "202112居民生活(合表)：不满1千伏：单费率：单一制",
+    "n": 2,
+    "p": 0.0625
+   },
+   {
+    "v": "202112冰蓄冷：1-10千伏：单费率：单一制",
+    "n": 1,
+    "p": 0.0312
+   },
+   {
+    "v": "220至380伏-一般工商业-工商业单一制-无特殊政策",
+    "n": 1,
+    "p": 0.0312
+   }
+  ],
+  "urbanrural": [
+   {
+    "v": "城市",
+    "n": 32,
+    "p": 1.0
+   }
+  ],
+  "agrt_categ": [
+   {
+    "v": "消费协议",
+    "n": 1,
+    "p": 1.0
+   }
+  ],
+  "urbanrural_categ": [
+   {
+    "v": "城市",
+    "n": 30,
+    "p": 1.0
+   }
+  ],
+  "cust_ind_cls_desc": [
+   {
+    "v": "城镇居民",
+    "n": 12,
+    "p": 0.4
+   },
+   {
+    "v": "纺织、服装及日用品专门零售",
+    "n": 7,
+    "p": 0.2333
+   },
+   {
+    "v": "房地产开发经营",
+    "n": 4,
+    "p": 0.1333
+   },
+   {
+    "v": "其他居民服务业",
+    "n": 1,
+    "p": 0.0333
+   },
+   {
+    "v": "国家行政机构",
+    "n": 1,
+    "p": 0.0333
+   },
+   {
+    "v": "2.土木工程建筑业",
+    "n": 1,
+    "p": 0.0333
+   },
+   {
+    "v": "学前教育",
+    "n": 1,
+    "p": 0.0333
+   },
+   {
+    "v": "艺术表演场馆",
+    "n": 1,
+    "p": 0.0333
+   },
+   {
+    "v": "其他未列明的金融活动",
+    "n": 1,
+    "p": 0.0333
+   },
+   {
+    "v": "互联网信息服务",
+    "n": 1,
+    "p": 0.0333
+   }
+  ],
+  "cust_ind_ustry_cls": [
+   {
+    "v": "第三产业",
+    "n": 17,
+    "p": 0.5667
+   },
+   {
+    "v": "城镇居民",
+    "n": 12,
+    "p": 0.4
+   },
+   {
+    "v": "第二产业",
+    "n": 1,
+    "p": 0.0333
+   }
+  ],
+  "impt_lv": [
+   {
+    "v": "非重要用户",
+    "n": 29,
+    "p": 0.9667
+   },
+   {
+    "v": "二级重要用户",
+    "n": 1,
+    "p": 0.0333
+   }
+  ],
+  "settle_acct_categ": [
+   {
+    "v": "普通",
+    "n": 29,
+    "p": 1.0
+   }
+  ],
+  "pay_mode": [
+   {
+    "v": "电力网点交费",
+    "n": 12,
+    "p": 0.4138
+   },
+   {
+    "v": "委托代扣",
+    "n": 9,
+    "p": 0.3103
+   },
+   {
+    "v": "e户通代扣",
+    "n": 8,
+    "p": 0.2759
+   }
+  ],
+  "bill_mode": [
+   {
+    "v": "单开",
+    "n": 29,
+    "p": 1.0
+   }
+  ],
+  "inv_mode": [
+   {
+    "v": "单开",
+    "n": 29,
+    "p": 1.0
+   }
+  ],
+  "note_type": [
+   {
+    "v": "全电普通发票",
+    "n": 24,
+    "p": 0.8276
+   },
+   {
+    "v": "全电专用发票",
+    "n": 5,
+    "p": 0.1724
+   }
+  ]
+ },
+ "metering": {
+  "inst_cls_desc": [
+   {
+    "v": "用电客户",
+    "n": 39,
+    "p": 1.0
+   }
+  ],
+  "inst_char_desc": [
+   {
+    "v": "结算",
+    "n": 39,
+    "p": 1.0
+   }
+  ],
+  "inst_usage_cls_desc": [
+   {
+    "v": "售电侧结算",
+    "n": 39,
+    "p": 1.0
+   }
+  ],
+  "inst_affil_side_desc": [
+   {
+    "v": "低压侧",
+    "n": 37,
+    "p": 0.9487
+   },
+   {
+    "v": "\\N",
+    "n": 2,
+    "p": 0.0513
+   }
+  ],
+  "inst_cap": [
+   {
+    "v": 8.0,
+    "n": 8,
+    "p": 0.2051
+   },
+   {
+    "v": 6.0,
+    "n": 4,
+    "p": 0.1026
+   },
+   {
+    "v": 4.0,
+    "n": 4,
+    "p": 0.1026
+   },
+   {
+    "v": 36.0,
+    "n": 3,
+    "p": 0.0769
+   },
+   {
+    "v": 100.0,
+    "n": 2,
+    "p": 0.0513
+   },
+   {
+    "v": 10700.0,
+    "n": 2,
+    "p": 0.0513
+   },
+   {
+    "v": 12.0,
+    "n": 2,
+    "p": 0.0513
+   },
+   {
+    "v": 160.0,
+    "n": 2,
+    "p": 0.0513
+   },
+   {
+    "v": 7450.0,
+    "n": 2,
+    "p": 0.0513
+   },
+   {
+    "v": 1000.0,
+    "n": 2,
+    "p": 0.0513
+   },
+   {
+    "v": 2850.0,
+    "n": 2,
+    "p": 0.0513
+   },
+   {
+    "v": 1800.0,
+    "n": 2,
+    "p": 0.0513
+   },
+   {
+    "v": 2.0,
+    "n": 1,
+    "p": 0.0256
+   },
+   {
+    "v": 750.0,
+    "n": 1,
+    "p": 0.0256
+   },
+   {
+    "v": 90.0,
+    "n": 1,
+    "p": 0.0256
+   },
+   {
+    "v": 400.0,
+    "n": 1,
+    "p": 0.0256
+   }
+  ],
+  "wire_mode_desc": [
+   {
+    "v": "单相",
+    "n": 17,
+    "p": 0.4722
+   },
+   {
+    "v": "三相三线",
+    "n": 11,
+    "p": 0.3056
+   },
+   {
+    "v": "三相四线",
+    "n": 8,
+    "p": 0.2222
+   }
+  ],
+  "rv_desc": [
+   {
+    "v": "220V",
+    "n": 17,
+    "p": 0.4722
+   },
+   {
+    "v": "3×100V",
+    "n": 11,
+    "p": 0.3056
+   },
+   {
+    "v": "3×220/380V",
+    "n": 8,
+    "p": 0.2222
+   }
+  ],
+  "cali_cur_desc": [
+   {
+    "v": "5(60)A",
+    "n": 22,
+    "p": 0.6111
+   },
+   {
+    "v": "1.5(6)A",
+    "n": 14,
+    "p": 0.3889
+   }
+  ],
+  "bidi_flag": [
+   {
+    "v": "否",
+    "n": 34,
+    "p": 0.9444
+   },
+   {
+    "v": "是",
+    "n": 2,
+    "p": 0.0556
+   }
+  ],
+  "meter_categ": [
+   {
+    "v": "智能电能表",
+    "n": 36,
+    "p": 1.0
+   }
+  ],
+  "meter_dev_cls": [
+   {
+    "v": "电能表",
+    "n": 36,
+    "p": 1.0
+   }
+  ],
+  "comp_rto": [
+   {
+    "v": 1,
+    "n": 29,
+    "p": 0.5577
+   },
+   {
+    "v": 2000,
+    "n": 6,
+    "p": 0.1154
+   },
+   {
+    "v": 10000,
+    "n": 6,
+    "p": 0.1154
+   },
+   {
+    "v": 4000,
+    "n": 4,
+    "p": 0.0769
+   },
+   {
+    "v": 30,
+    "n": 3,
+    "p": 0.0577
+   },
+   {
+    "v": 120,
+    "n": 2,
+    "p": 0.0385
+   },
+   {
+    "v": 40,
+    "n": 1,
+    "p": 0.0192
+   },
+   {
+    "v": 1000,
+    "n": 1,
+    "p": 0.0192
+   }
+  ],
+  "meter_mode_desc": [
+   {
+    "v": "高供高计",
+    "n": 360,
+    "p": 0.7484
+   },
+   {
+    "v": "低供低计",
+    "n": 76,
+    "p": 0.158
+   },
+   {
+    "v": "高供低计",
+    "n": 45,
+    "p": 0.0936
+   }
+  ]
+ },
+ "id_shape": {
+  "cntrl_sta_id": {
+   "min": 12332601018,
+   "max": 22487001696,
+   "n": 9,
+   "lens": {
+    "11": 9
+   }
+  },
+  "pipeline_id": {
+   "min": 187820,
+   "max": 744339322,
+   "n": 15,
+   "lens": {
+    "6": 9,
+    "9": 4,
+    "7": 2
+   }
+  },
+  "dist_sta_id": {
+   "min": 190194,
+   "max": 9961809,
+   "n": 14,
+   "lens": {
+    "6": 8,
+    "7": 6
+   }
+  },
+  "cust_id": {
+   "min": 13222143,
+   "max": 18325408914,
+   "n": 30,
+   "lens": {
+    "8": 26,
+    "11": 4
+   }
+  },
+  "inst_id": {
+   "min": 11581854500,
+   "max": 18327597483,
+   "n": 39,
+   "lens": {
+    "11": 39
+   }
+  },
+  "dev_id": {
+   "min": 8100000006521935,
+   "max": 8100000042041285,
+   "n": 36,
+   "lens": {
+    "16": 36
+   }
+  },
+  "bilg_card_id": {
+   "min": 23987586811,
+   "max": 5000000003736306,
+   "n": 207,
+   "lens": {
+    "14": 126,
+    "11": 70,
+    "16": 11
+   }
+  },
+  "rcvbl_acct_id": {
+   "min": 7375534959,
+   "max": 7496248166,
+   "n": 76,
+   "lens": {
+    "10": 76
+   }
+  },
+  "calc_id": {
+   "min": 2147483647,
+   "max": 6131428782,
+   "n": 207,
+   "lens": {
+    "10": 207
+   }
+  }
+ },
+ "business_span": {
+  "dwd_cst_inst_bilg_card": {
+   "col": "qty_charg_ym",
+   "min": "202603",
+   "max": "202604",
+   "n": 207
+  },
+  "dwd_cst_rcvbl_acct": {
+   "col": "rcvbl_ym",
+   "min": "202603",
+   "max": "202604",
+   "n": 76
+  },
+  "dwd_cst_rcvd_acct": {
+   "col": "rcvd_ym",
+   "min": "202603",
+   "max": "202604",
+   "n": 48
+  },
+  "dwd_cst_mr_data": {
+   "col": "qty_charg_ym",
+   "min": "202603",
+   "max": "202604",
+   "n": 392
+  },
+  "dwd_cst_charg_acct": {
+   "col": "charg_ym",
+   "min": "202603",
+   "max": "202604",
+   "n": 83
+  },
+  "dwd_cst_es_meter_energy_day_l_xz": {
+   "col": "data_date",
+   "min": "2026-03-01 00:00:00",
+   "max": "2026-05-21 00:00:00",
+   "n": 5494
+  },
+  "dwd_cst_meter_energy_day_h_xz": {
+   "col": "data_date",
+   "min": "2026-03-01 00:00:00",
+   "max": "2026-05-21 00:00:00",
+   "n": 2539
+  },
+  "dwd_cst_es_meter_energy_day_p": {
+   "col": "data_date",
+   "min": "2026-03-01 00:00:00",
+   "max": "2026-05-19 00:00:00",
+   "n": 320
+  },
+  "dwd_cst_a_ll_dist_det_day": {
+   "col": "stat_date",
+   "min": "2026-04-30 00:00:00",
+   "max": "2026-04-30 00:00:00",
+   "n": 803
+  },
+  "dwd_cst_es_e_mp_comp_curve_h": {
+   "col": "data_date",
+   "min": "2026-04-30 00:00:00",
+   "max": "2026-04-30 00:00:00",
+   "n": 264
+  }
+ },
+ "bill_ratio": {
+  "addl_over_settle": null,
+  "settle_qty_buckets": [
+   "settle_qty_01",
+   "settle_qty_02",
+   "settle_qty_03",
+   "settle_qty_04",
+   "settle_qty_05"
+  ],
+  "prc_ec_categ": [
+   {
+    "v": "05",
+    "n": 157,
+    "p": 0.7585
+   },
+   {
+    "v": "03",
+    "n": 26,
+    "p": 0.1256
+   },
+   {
+    "v": "0200",
+    "n": 20,
+    "p": 0.0966
+   },
+   {
+    "v": "5",
+    "n": 4,
+    "p": 0.0193
+   }
+  ],
+  "read_type": [
+   {
+    "v": "01",
+    "n": 110,
+    "p": 0.2806
+   },
+   {
+    "v": "04",
+    "n": 100,
+    "p": 0.2551
+   },
+   {
+    "v": "02",
+    "n": 60,
+    "p": 0.1531
+   },
+   {
+    "v": "03",
+    "n": 60,
+    "p": 0.1531
+   },
+   {
+    "v": "11",
+    "n": 20,
+    "p": 0.051
+   },
+   {
+    "v": "14",
+    "n": 16,
+    "p": 0.0408
+   },
+   {
+    "v": "1",
+    "n": 11,
+    "p": 0.0281
+   },
+   {
+    "v": "3",
+    "n": 5,
+    "p": 0.0128
+   },
+   {
+    "v": "2",
+    "n": 5,
+    "p": 0.0128
+   },
+   {
+    "v": "4",
+    "n": 5,
+    "p": 0.0128
+   }
+  ],
+  "data_src": [
+   {
+    "v": "06",
+    "n": 266,
+    "p": 0.6786
+   },
+   {
+    "v": "11",
+    "n": 98,
+    "p": 0.25
+   },
+   {
+    "v": "6",
+    "n": 28,
+    "p": 0.0714
+   }
+  ],
+  "sgmt_exp_attr_cls": [
+   {
+    "v": "0802",
+    "n": 132,
+    "p": 0.307
+   },
+   {
+    "v": "0801",
+    "n": 132,
+    "p": 0.307
+   },
+   {
+    "v": "0101",
+    "n": 41,
+    "p": 0.0953
+   },
+   {
+    "v": "0202",
+    "n": 30,
+    "p": 0.0698
+   },
+   {
+    "v": "0201",
+    "n": 30,
+    "p": 0.0698
+   },
+   {
+    "v": "0602",
+    "n": 22,
+    "p": 0.0512
+   },
+   {
+    "v": "0601",
+    "n": 22,
+    "p": 0.0512
+   },
+   {
+    "v": "802",
+    "n": 6,
+    "p": 0.014
+   },
+   {
+    "v": "801",
+    "n": 6,
+    "p": 0.014
+   },
+   {
+    "v": "0212",
+    "n": 3,
+    "p": 0.007
+   },
+   {
+    "v": "0210",
+    "n": 2,
+    "p": 0.0047
+   },
+   {
+    "v": "0211",
+    "n": 2,
+    "p": 0.0047
+   },
+   {
+    "v": "0205",
+    "n": 1,
+    "p": 0.0023
+   },
+   {
+    "v": "0207",
+    "n": 1,
+    "p": 0.0023
+   }
+  ],
+  "ctlg_cls": [
+   {
+    "v": "04",
+    "n": 136,
+    "p": 0.3163
+   },
+   {
+    "v": "02",
+    "n": 125,
+    "p": 0.2907
+   },
+   {
+    "v": "01",
+    "n": 100,
+    "p": 0.2326
+   },
+   {
+    "v": "03",
+    "n": 57,
+    "p": 0.1326
+   },
+   {
+    "v": "4",
+    "n": 4,
+    "p": 0.0093
+   },
+   {
+    "v": "1",
+    "n": 4,
+    "p": 0.0093
+   },
+   {
+    "v": "2",
+    "n": 4,
+    "p": 0.0093
+   }
+  ],
+  "rcvbl_addl_charg_ctlg": [
+   {
+    "v": "9904",
+    "n": 75,
+    "p": 0.3
+   },
+   {
+    "v": "07",
+    "n": 75,
+    "p": 0.3
+   },
+   {
+    "v": "11",
+    "n": 75,
+    "p": 0.3
+   },
+   {
+    "v": "04",
+    "n": 25,
+    "p": 0.1
+   }
+  ]
+ }
+}

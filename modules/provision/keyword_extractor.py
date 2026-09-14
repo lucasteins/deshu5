@@ -4,7 +4,7 @@
 数据源（两部分，对应需求）：
 1. 治理库 schema_table_docs（表名 / 中文名 table_comment / 表描述 doc_text）
    + schema_column_docs 核心字段（PK 列名 column_name / 中文注释 column_comment）
-2. 暂存业务库（database01）中「非生产库表」（不在生产业务库 marketing_40 里的表）：
+2. 仿真业务库（fz01）中「非生产库表」（不在生产业务库 sc01 里的表）：
    从 information_schema 提取表名 + 列名 + 列注释
 
 分词策略：
@@ -128,9 +128,9 @@ def _read_schema_docs(db: DatabaseManager):
 
 
 def _read_staging_only_tables() -> list:
-    """暂存业务库中非生产业务库的表：[(table_name, comment, [(col_name, col_comment, is_pk)])]。
+    """仿真业务库中非生产业务库的表：[(table_name, comment, [(col_name, col_comment, is_pk)])]。
 
-    生产/暂存业务库名取自 db_profile.PROFILES；任一库不可达则返回 []。
+    生产/仿真业务库名取自 db_profile.PROFILES；任一库不可达则返回 []。
     """
     prod_biz = db_profile.PROFILES['production']['business']
     stag_biz = db_profile.PROFILES['staging']['business']
@@ -138,7 +138,7 @@ def _read_staging_only_tables() -> list:
         prod_tables = _information_schema_tables(prod_biz)
         stag_tables = _information_schema_tables(stag_biz)
     except Exception as e:
-        print(f'[keyword] 暂存/生产业务库读取失败，跳过非生产表提取: {e}')
+        print(f'[keyword] 仿真/生产业务库读取失败，跳过非生产表提取: {e}')
         return []
     only = sorted(set(stag_tables) - set(prod_tables))
     if not only:
@@ -258,8 +258,8 @@ def extract_keywords(progress_cb=None, db=None, rebuild: bool = True) -> dict:
             _add(k, tname, _W_COL_COMMENT + (1 if k == (ccomment or '').strip() else 0), source_text=ccomment)
     _emit('keywords', f'schema 文档打分 {len(scores)} 个（关键词,表）对')
 
-    # ---- 2. 暂存库非生产表 ----
-    _emit('keywords', '从暂存业务库非生产表提取关键词（打分）')
+    # ---- 2. 仿真库非生产表 ----
+    _emit('keywords', '从仿真业务库非生产表提取关键词（打分）')
     staging_only = _read_staging_only_tables()
     stats['staging_only_tables'] = len(staging_only)
     for tname, comment, cols in staging_only:

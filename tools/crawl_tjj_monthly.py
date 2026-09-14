@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""浙江省统计局「月度卡片」抓取 → database01 主题窄表入库（skill: ads-table-standard 第七节）
+"""浙江省统计局「月度卡片」抓取 → fz01 主题窄表入库（skill: ads-table-standard 第七节）
 
 数据源：https://mapi.zjzwfw.gov.cn/web/mgop/gov-open/zj/2001941911/reserved/index.html#/monthlyCard
 链路：mgop h5 网关（免 token，sign=md5("token=&ak=..&api=..&ts=..&data=null")），
@@ -45,8 +45,8 @@ GW = 'https://mapi.zjzwfw.gov.cn/h5/mgop'
 PAGE = 'https://mapi.zjzwfw.gov.cn/web/mgop/gov-open/zj/2001941911/reserved/index.html#/monthlyCard'
 SRC_NAME = '浙江省统计局月度卡片'
 
-DB_BIZ = 'database01'
-DB_GOV = 'database01_governance'
+DB_BIZ = 'fz01'
+DB_GOV = 'fz01_governance'
 
 THEMES = [  # (ztCode, 主题名, ads 表名, 主题中文全称)
     ('2', 'GDP', 'ads_tjj_gdp_mon', '月度-GDP'),
@@ -371,7 +371,7 @@ def main():
 
     # ============ 本体库同步 ============
     print('== 本体库同步 ==')
-    ont = connect('database01_ontology')
+    ont = connect('fz01_ontology')
     with ont.cursor() as cur:
         # 纪律（2026-09 起）：不建逐表实体，14 张主题表全部挂入 ReportStats 域实体
         from tools.enrich_report_relations import attach_tables_to_domain

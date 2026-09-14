@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
-"""数据库连接档位：生产库 / 暂存库 运行时切换（前端设置页驱动，免重启）
+"""数据库连接档位：生产库 / 仿真库 运行时切换（前端设置页驱动，免重启）
 
-- 生产库：marketing_40 / marketing_governance / marketing_log / marketing_ontology（config/env 默认）
-- 暂存库：database01 / database01_governance / database01_governance（日志并治理库）/ database01_ontology
+命名约定（2026-09-14 重命名）：
+- 生产档位 sc01 ：sc01 / sc01_governance / sc01_log / sc01_ontology（config/env 默认）
+  真实数据基线 = fz01 剔除仿真后的 71,992 行（120 表）
+- 仿真档位 fz01：fz01 / fz01_governance / fz01_governance（日志并治理库）/ fz01_ontology
+  含全部仿真数据（2,425,404 行），供回滚与对照
+- 档位 key（production/staging）保持不变，避免破坏 db_profile.json 与前端切换接口
 - 持久化：根目录 db_profile.json（gitignore）；环境变量 DB_PROFILE 优先
 - 连接层（core/database.py）在每次建立连接时读取 current()，切换即时生效
 """
@@ -14,18 +18,18 @@ import config
 
 PROFILES = {
     'production': {
-        'label': '生产库',
+        'label': '生产库 sc01',
         'business': config.MYSQL_DB_BUSINESS,
         'governance': config.MYSQL_DB_GOVERNANCE,
         'log': config.MYSQL_DB_LOG,
         'ontology': config.MYSQL_DB_ONTOLOGY,
     },
     'staging': {
-        'label': '暂存库',
-        'business': os.environ.get('STAGING_DB_BUSINESS', 'database01'),
-        'governance': os.environ.get('STAGING_DB_GOVERNANCE', 'database01_governance'),
-        'log': os.environ.get('STAGING_DB_LOG', 'database01_governance'),
-        'ontology': os.environ.get('STAGING_DB_ONTOLOGY', 'database01_ontology'),
+        'label': '仿真库 fz01',
+        'business': os.environ.get('STAGING_DB_BUSINESS', 'fz01'),
+        'governance': os.environ.get('STAGING_DB_GOVERNANCE', 'fz01_governance'),
+        'log': os.environ.get('STAGING_DB_LOG', 'fz01_governance'),
+        'ontology': os.environ.get('STAGING_DB_ONTOLOGY', 'fz01_ontology'),
     },
 }
 

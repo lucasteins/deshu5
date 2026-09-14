@@ -319,7 +319,7 @@ def export():
         if svc._ont is None:
             return jsonify({'success': False, 'error': '本体尚未构建'}), 404
         content, mimetype, ext = export_ontology(svc._ont, fmt)
-        filename = f'marketing_ontology_v{svc._ont.version}{ext}'
+        filename = f'sc01_ontology_v{svc._ont.version}{ext}'
         return Response(content, mimetype=mimetype,
                         headers={'Content-Disposition':
                                  f"attachment; filename*=UTF-8''{filename}"})

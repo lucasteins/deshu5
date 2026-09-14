@@ -120,7 +120,7 @@ class SchemaKnowledgeBase:
             ''')
 
             # 2026-08-15：sql_patterns 已并入 sql_knowledge（kind='template'），
-            # 旧表归档 marketing_log._bak_20260815_sql_patterns（见 _knowledge_merge.py），不再建表。
+            # 旧表归档 sc01_log._bak_20260815_sql_patterns（见 _knowledge_merge.py），不再建表。
             conn.commit()
     
     def build_all(self):

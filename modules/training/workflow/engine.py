@@ -72,7 +72,7 @@ DEFAULTS = {
         'top_k': getattr(config, 'RAG_TOP_K', 5),
     },
     'knowledge': {
-        # 知识来源：ontology = 本体层（marketing_ontology 库已生效版本）；
+        # 知识来源：ontology = 本体层（sc01_ontology 库已生效版本）；
         # legacy = 数据底座直读（SchemaPreloader / 治理库，回退档）
         'source': getattr(config, 'KNOWLEDGE_SOURCE', 'ontology'),
         # 报表层优先：省/市/县三级统计语义问题优先检索本体 report 层实体（统计报表），

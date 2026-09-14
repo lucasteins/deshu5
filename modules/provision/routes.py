@@ -103,7 +103,7 @@ def provision_execute(run_id):
             events.put({'stage': 'convert', 'msg': '开始直接转换入库'})
             out = pv.convert_run(run_id, parsed, validation,
                                  progress_cb=lambda e: events.put(e))
-            # 关键词-表映射提取（schema 文档 + 暂存非生产表 → keyword_table_map，打分消歧 1:1）
+            # 关键词-表映射提取（schema 文档 + 仿真非生产表 → keyword_table_map，打分消歧 1:1）
             events.put({'stage': 'keywords', 'msg': '提取关键词-表映射（打分消歧为一关键词一表）'})
             try:
                 from modules.provision.keyword_extractor import extract_keywords
@@ -290,7 +290,7 @@ def provision_keywords_extract():
     """独立重跑关键词-表映射提取（无需重新上传模板）。
 
     从当前治理库 schema_table_docs / schema_column_docs（PK 核心字段）
-    + 暂存业务库非生产表（database01 有、marketing_40 无的表）分词提取，
+    + 仿真业务库非生产表（fz01 有、sc01 无的表）分词提取，
     打分消歧为「一关键词一表」。
 
     body: {rebuild?: bool}（默认 true：先清空再写，保证 1:1；false 则追加但无法移除既有同关键词多表行）

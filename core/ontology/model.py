@@ -3,7 +3,7 @@
 
 Ontology 是不可变快照：
 - builder 从底座（information_schema / 治理库文档·码值·概念映射）提炼
-- store   持久化到 marketing_ontology 库（正式版 + 变更提案快照）
+- store   持久化到 sc01_ontology 库（正式版 + 变更提案快照）
 - service 加载已生效版本，向问数模块输出与 legacy 接口同形状的查询
 - export  序列化为 OWL/RDF（RDF/XML、Turtle、N-Triples、JSON-LD）
 """

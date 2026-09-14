@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""暂存治理库重建脚本（幂等，可重复执行）：database01_governance ← marketing_governance 表结构
+"""仿真治理库重建脚本（幂等，可重复执行）：fz01_governance ← sc01_governance 表结构
 
-- 除 business_domains（保留 99 行 SG-CIM4.5 参考数据）外，暂存治理库全部表 DROP 后
+- 除 business_domains（保留 99 行 SG-CIM4.5 参考数据）外，仿真治理库全部表 DROP 后
   按生产库 SHOW CREATE TABLE 结构重建 —— 消除 SchemaPreloader 启动自建表的列漂移
   （如 schema_table_docs 缺 domain_l1/domain_l2/domain_l3）
 - 治理内容一律留给素材提资流程写入，本脚本只保证表结构与参考数据
-- 只读生产库，只写暂存库
+- 只读生产库，只写仿真库
 """
 import sys
 
@@ -14,8 +14,8 @@ import pymysql
 sys.path.insert(0, r'D:\codex\deshu5')
 import config
 
-SRC_DB = 'marketing_governance'
-DST_DB = 'database01_governance'
+SRC_DB = 'sc01_governance'
+DST_DB = 'fz01_governance'
 KEEP = {'business_domains'}  # 保留参考数据，不重建
 
 
@@ -68,7 +68,7 @@ def main():
     finally:
         src.close()
         dst.close()
-    print('[done] 暂存治理库重建完成')
+    print('[done] 仿真治理库重建完成')
 
 
 if __name__ == '__main__':

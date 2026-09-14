@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-r"""管理单位维表 dim_cst_mgt_org 全量装载（database01 + marketing_40 双库）
+r"""管理单位维表 dim_cst_mgt_org 全量装载（fz01 + sc01 双库）
 
 来源：解密后的 管理单位dim_cst_mgt_org.xlsx（5533 行浙江机构全树，工具内部路径常量）。
 源文件为 Office 密码加密文档；解密再生方式（密码向数据提供方索取，勿入库勿入码）：
@@ -23,7 +23,7 @@ import pymysql
 import config
 
 XLS = r'D:\codex\deshu5\dim_cst_mgt_org_decrypted.xlsx'
-TARGET_DBS = ['database01', 'marketing_40']
+TARGET_DBS = ['fz01', 'sc01']
 
 # Excel 英文名行 → 库表列（29 列）
 COLMAP = {
@@ -85,7 +85,7 @@ def write_db(conn, db, rows, dry_run):
         if dry_run:
             print(f'  [dry] {db}.dim_cst_mgt_org: DELETE ALL + INSERT {len(rows)} 行')
             return
-        # marketing_40 存在 FK（dim_cst_dev → mgt_org_code）：临时关 FK 检查做整体置换，
+        # sc01 存在 FK（dim_cst_dev → mgt_org_code）：临时关 FK 检查做整体置换，
         # 装载后校验被引用码零孤儿（Excel 全覆盖已核实）
         cur.execute('SET FOREIGN_KEY_CHECKS=0')
         cur.execute('DELETE FROM dim_cst_mgt_org')
@@ -99,7 +99,7 @@ def write_db(conn, db, rows, dry_run):
         print(f'  [ok] {db}.dim_cst_mgt_org: {cnt} 行（distinct code {dc}）')
         cur.execute('SELECT COUNT(*) FROM dim_cst_dev d LEFT JOIN dim_cst_mgt_org o '
                     'ON d.mgt_org_code = o.mgt_org_code WHERE o.mgt_org_code IS NULL'
-                    if db == 'marketing_40' else 'SELECT 0')
+                    if db == 'sc01' else 'SELECT 0')
         orphans = cur.fetchone()[0]
         print(f'  [fk-check] dim_cst_dev 孤儿行: {orphans}（应为 0）')
         if orphans:
@@ -129,7 +129,7 @@ def main():
 
     if not args.dry_run:
         # 治理库 schema_table_docs 行数刷新（两个治理库都刷，dim 表结构未变只动 row_count）
-        for gdb, biz in (('database01_governance', 'database01'), ('marketing_governance', 'marketing_40')):
+        for gdb, biz in (('fz01_governance', 'fz01'), ('sc01_governance', 'sc01')):
             gov = pymysql.connect(host=config.MYSQL_HOST, port=config.MYSQL_PORT,
                                   user=config.MYSQL_USER, password=config.MYSQL_PASSWORD,
                                   database=gdb, charset='utf8mb4')

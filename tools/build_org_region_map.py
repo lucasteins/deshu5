@@ -19,9 +19,9 @@ import pymysql
 
 import config
 
-DB_BIZ = 'database01'
-DB_GOV = 'database01_governance'
-DB_ONT = 'database01_ontology'
+DB_BIZ = 'fz01'
+DB_GOV = 'fz01_governance'
+DB_ONT = 'fz01_ontology'
 TABLE = 'dim_org_region_map'
 
 # (mgt_org_code, mgt_org_name, org_level, region_adcode, region_name, region_level, remark)

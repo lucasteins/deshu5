@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""本体持久化：marketing_ontology 库 7 张表的读写。
+"""本体持久化：sc01_ontology 库 7 张表的读写。
 
 - 正式表（ontology_meta + 5 张内容表）：当前生效版本，问数模块与导出只读这里
 - ontology_proposals：变更提案（含完整快照与 diff），审批通过后快照整体换版
@@ -17,7 +17,7 @@ from core.ontology.model import Ontology
 
 
 class OntologyStore:
-    """marketing_ontology 库读写。线程安全交给调用方（service 单例串行化）。"""
+    """sc01_ontology 库读写。线程安全交给调用方（service 单例串行化）。"""
 
     def __init__(self, db: DatabaseManager = None):
         self.db = db or DatabaseManager()

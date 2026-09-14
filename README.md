@@ -1,7 +1,7 @@
 # 智能问数训练系统 deshu5（轻量化重构版）
 
 基于 deshu4（db/smart-query-trainer）重构。六业务模块相对独立，共享同一 MySQL 底座，
-**API 路径与前端零改动**，存量数据（marketing_40 / marketing_governance / marketing_log）直接可用。
+**API 路径与前端零改动**，存量数据（sc01 / sc01_governance / sc01_log）直接可用。
 
 ## 架构
 
@@ -18,11 +18,11 @@ deshu5/
 │   ├── schema_kb.py        Schema 知识库（表定位/列检索）
 │   ├── rag_retriever.py    RAG 检索（问答对/错题/码值相似度召回）
 │   ├── knowledge_retriever.py 知识读取口（码值/模板/规则，空表回退代码常量）
-│   └── ontology/           本体模型层：从底座提炼本体快照，持久化于 marketing_ontology 库
+│   └── ontology/           本体模型层：从底座提炼本体快照，持久化于 sc01_ontology 库
 │       ├── model.py        本体内存模型（类/属性/关系/枚举/概念）+ 版本 diff
 │       ├── fingerprint.py  底座结构指纹（漂移检测：表/列/主外键/关系文档 hash）
 │       ├── builder.py      本体提炼（SchemaPreloader + 码值三表 + 概念映射 + 同义词）
-│       ├── store.py        marketing_ontology 库读写（正式版 + 变更提案）
+│       ├── store.py        sc01_ontology 库读写（正式版 + 变更提案）
 │       ├── service.py      问数模块统一门面（与 legacy 接口同形状，knowledge.source 切换）
 │       └── export.py       OWL/RDF 导出（RDF/XML、Turtle、N-Triples、JSON-LD）
 ├── modules/
@@ -62,7 +62,7 @@ deshu5/
 ## 本体模型层（数据底座 → 本体 → 问数）
 
 本体从数据底座提炼（表→owl:Class、列→owl:DatatypeProperty、主外键/治理关系→owl:ObjectProperty、
-码值→枚举、业务概念→skos:Concept），**持久化于 marketing_ontology 库，不临时抽取**。
+码值→枚举、业务概念→skos:Concept），**持久化于 sc01_ontology 库，不临时抽取**。
 仅当检测到基础表结构漂移（结构指纹比对）时生成变更提案，前端「本体模型」页签审批通过后才换版生效；
 问数模块经 workflow `knowledge.source`（ontology/legacy）切换知识来源，支持 A/B 与一键回退。
 导出：`GET /api/ontology/export?format=owl|ttl|nt|jsonld`。
@@ -77,10 +77,14 @@ deshu5/
 
 | 库 | 用途 |
 |----|------|
-| marketing_40 | 业务库：35 张营销共享层表，SQL 只读执行目标 |
-| marketing_governance | 治理库：问答对/错题/码值/Schema 文档/提资溯源 |
-| marketing_log | 日志库：generation_logs 运行日志 |
-| marketing_ontology | 本体库：本体版本/类/属性/关系/枚举/概念/变更提案 |
+| sc01 | 业务库：35 张营销共享层表，SQL 只读执行目标 |
+| sc01_governance | 治理库：问答对/错题/码值/Schema 文档/提资溯源 |
+| sc01_log | 日志库：generation_logs 运行日志 |
+| sc01_ontology | 本体库：本体版本/类/属性/关系/枚举/概念/变更提案 |
+
+> **双档位命名（2026-09-14 重命名）**：生产档位 `sc01*`（真实数据 71,992 行 / 120 表）；
+> 仿真档位 `fz01*`（保留全部仿真数据 2,425,404 行，供回滚与对照）。
+> 档位 key 仍为 `production` / `staging`，前端设置页可热切换，无需改前端。
 
 ## 相比 deshu4 的变化
 

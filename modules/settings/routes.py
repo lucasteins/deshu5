@@ -96,7 +96,7 @@ def _ping_profile(profile: dict) -> dict:
 
 @bp.route('/db', methods=['GET'])
 def get_db_settings():
-    """当前数据库档位 + 全部档位（生产/暂存）四库连通状态"""
+    """当前数据库档位 + 全部档位（生产/仿真）四库连通状态"""
     from core import db_profile
 
     profiles = []
@@ -130,7 +130,7 @@ def get_db_settings():
 
 @bp.route('/db/profile', methods=['POST'])
 def switch_db_profile():
-    """切换数据库档位（生产/暂存）。body: {profile: 'production'|'staging'}
+    """切换数据库档位（生产/仿真）。body: {profile: 'production'|'staging'}
     切换后失效全部缓存并重载（SchemaPreloader/RAG/SchemaLoader/生成器），免重启。"""
     from core import context
     from core import db_profile

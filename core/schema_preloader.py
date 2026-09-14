@@ -2,10 +2,10 @@
 """Schema 预加载器：元数据加载（以业务库 information_schema 为权威），注入全局上下文。
 
 职责：
-1. 元数据权威来源 = 业务库 marketing_40 的 information_schema：
+1. 元数据权威来源 = 业务库 sc01 的 information_schema：
    表/列中文注释随物理表 COMMENT 落库，表名/注释/行数/字段/类型/主键直接读取；
    主外键关系 = 物理外键图（information_schema.key_column_usage，合法 JOIN 边的权威）
-   ∪ 治理库（marketing_governance）schema_relationship_docs 的业务语义/逻辑关系，
+   ∪ 治理库（sc01_governance）schema_relationship_docs 的业务语义/逻辑关系，
    双源合并、冲突以物理外键为准（见 _merge_relationships）。
 2. DDL 文件（35张营销共享层表_重构版v2.0_20260519.sql 等）仅用于初次导入或
    preload(force=True) 显式刷新：解析文件 → 重写 governance 库文档（文档落库链路不变）。
@@ -367,7 +367,7 @@ class SchemaPreloader:
     def _load_gov_comment_maps(self) -> Tuple[Dict[str, str], Dict[Tuple[str, str], str]]:
         """治理库文档注释兜底：schema_table_docs / schema_column_docs 的策展中文名。
 
-        业务库 information_schema 注释为权威源，但暂存库等环境物理表可能未落 COMMENT，
+        业务库 information_schema 注释为权威源，但仿真库等环境物理表可能未落 COMMENT，
         此时用治理文档补全（仅填空，不覆盖非空注释）。
         """
         table_map: Dict[str, str] = {}
@@ -421,7 +421,7 @@ class SchemaPreloader:
                 })
             if not tables:
                 return False
-            # 治理文档注释兜底（仅填空）：暂存库物理表无 COMMENT 时仍有中文名
+            # 治理文档注释兜底（仅填空）：仿真库物理表无 COMMENT 时仍有中文名
             t_map, c_map = self._load_gov_comment_maps()
             filled_t = filled_c = 0
             for name, info in tables.items():
