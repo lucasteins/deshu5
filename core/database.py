@@ -448,6 +448,34 @@ def init_report_tables():
         conn.commit()
 
 
+def init_skill_chat_tables():
+    """技能对话模块：会话表 + 消息表（治理库，幂等）"""
+    db = DatabaseManager()
+    with db.connect_governance() as conn:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS skill_chat_sessions (
+                id VARCHAR(36) PRIMARY KEY,
+                skill VARCHAR(128),
+                title VARCHAR(255),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_skill_updated (skill, updated_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS skill_chat_messages (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                session_id VARCHAR(36),
+                role VARCHAR(16),
+                content MEDIUMTEXT,
+                usage_json TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_session (session_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ''')
+        conn.commit()
+
+
 def import_code_values_if_empty() -> bool:
     """码值表为空时从 Excel 文件导入（幂等）。返回是否执行了导入。"""
     import pandas as pd
@@ -489,6 +517,7 @@ def init_all_tables():
     init_qa_pairs_columns()
     init_code_values_tables()
     init_report_tables()
+    init_skill_chat_tables()
     # 指标快照（KPI 真实趋势线/环比的数据源，F1.2 增补）：放最后，失败不影响上述基础表
     try:
         from core.stats_history import init_stats_snapshots_table

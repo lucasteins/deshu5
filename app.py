@@ -58,6 +58,7 @@ def create_app() -> Flask:
     from modules.settings.routes import bp as settings_bp, workflows_bp
     from modules.training.routes import bp as training_bp
     from modules.training.sqllab.routes import bp as sqllab_bp
+    from modules.training.skillchat.routes import bp as skillchat_bp
     from modules.resources.routes import bp as resources_bp
     from modules.provision.routes import bp as provision_bp
     from modules.ontology.routes import bp as ontology_bp
@@ -67,6 +68,7 @@ def create_app() -> Flask:
     app.register_blueprint(workflows_bp)
     app.register_blueprint(training_bp)
     app.register_blueprint(sqllab_bp)
+    app.register_blueprint(skillchat_bp)
     app.register_blueprint(resources_bp)
     app.register_blueprint(provision_bp)
     app.register_blueprint(ontology_bp)
@@ -78,7 +80,7 @@ def create_app() -> Flask:
         return jsonify({
             'status': 'ok',
             'version': '5.0.0',
-            'modules': ['settings', 'training', 'sqllab', 'resources', 'provision', 'ontology', 'report'],
+            'modules': ['settings', 'training', 'sqllab', 'skillchat', 'resources', 'provision', 'ontology', 'report'],
         })
 
     # ---- 前端（Vue 3）托管：/（F3.2 切换，2026-09-11 皮卡丘拍板）----

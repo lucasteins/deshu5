@@ -33,6 +33,7 @@ import {
   type ReportTemplateSection,
 } from '@/api/report'
 import { DsEmpty, confirm, toast } from '@/components'
+import { renderMarkdown } from '@/utils/markdown'
 
 /* ================= 页签（URL #tab 驱动） ================= */
 
@@ -351,73 +352,7 @@ function fmtMs(ms: number | undefined | null): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`
 }
 
-/* ================= Markdown 渲染（无外部依赖，对齐旧实现） ================= */
-
-function escapeHtml(s: string): string {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-function renderInline(s: string): string {
-  return escapeHtml(s)
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-}
-
-function renderMarkdown(md: string): string {
-  if (!md) return ''
-  const lines = md.replace(/\r\n/g, '\n').split('\n')
-  let html = ''
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
-    if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|[\s\-:|]+\|\s*$/.test(lines[i + 1])) {
-      const headers = line.split('|').slice(1, -1).map((c) => c.trim())
-      i += 2
-      const rowCells: string[][] = []
-      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
-        rowCells.push(lines[i].split('|').slice(1, -1).map((c) => c.trim()))
-        i++
-      }
-      html += `<table class="rp-table"><thead><tr><th>${headers.map(renderInline).join('</th><th>')}</th></tr></thead><tbody>${rowCells
-        .map((cells) => `<tr>${cells.map((c) => `<td>${renderInline(c)}</td>`).join('')}</tr>`)
-        .join('')}</tbody></table>`
-      continue
-    }
-    const h = line.match(/^(#{1,4})\s+(.*)$/)
-    if (h) {
-      const lv = h[1].length
-      html += `<h${lv}>${renderInline(h[2])}</h${lv}>`
-      i++
-      continue
-    }
-    if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
-      const ordered = /^\s*\d+\.\s+/.test(line)
-      html += ordered ? '<ol>' : '<ul>'
-      while (i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i])) {
-        html += `<li>${renderInline(lines[i].replace(/^\s*([-*+]|\d+\.)\s+/, ''))}</li>`
-        i++
-      }
-      html += ordered ? '</ol>' : '</ul>'
-      continue
-    }
-    if (/^\s*---+\s*$/.test(line)) {
-      html += '<hr>'
-      i++
-      continue
-    }
-    if (line.trim() === '') {
-      i++
-      continue
-    }
-    html += `<p>${renderInline(line)}</p>`
-    i++
-  }
-  return html
-}
+/* ================= Markdown 渲染：@/utils/markdown（与技能对话页共用） ================= */
 
 /* ================= 历史报告 ================= */
 

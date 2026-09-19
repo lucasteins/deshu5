@@ -69,6 +69,18 @@ export const NAV_GROUPS: NavGroup[] = [
         load: () => import('@/views/training/TrainingView.vue'),
       },
       {
+        name: 'skill-chat',
+        path: '/skill-chat',
+        label: '技能对话',
+        icon: 'MagicStick',
+        title: '技能对话',
+        subtitle: '选择技能 · 示例命令 · 流式对话',
+        phase: 'F2.7',
+        summary: '选择 skills 能力域与大模型多轮对话，示例命令一键发送，会话持久化可回看。',
+        tabs: [],
+        load: () => import('@/views/skill-chat/SkillChatView.vue'),
+      },
+      {
         name: 'qa',
         path: '/qa',
         label: '智能问答',
