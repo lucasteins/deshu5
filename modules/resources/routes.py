@@ -556,3 +556,48 @@ def get_human_review_sample():
         return jsonify({'success': True, 'items': items})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ==================== kjgl 数据同步 ====================
+
+@bp.route('/api/resources/sync-kjgl01', methods=['POST'])
+def sync_kjgl01():
+    """从 kjgl 生产库全量重同步到 kjgl01 业务库（DROP 重拷 + 外键重建 + Schema 文档刷新）。
+
+    仅写 kjgl01 系列库；kjgl 生产库全程只读，fz01/sc01 不触碰。
+    同步完成后若当前档位即 kjgl，失效 Schema/RAG/生成器缓存，免重启动生效。
+    """
+    from core import context, db_profile
+    from modules.resources import kjgl_sync
+
+    try:
+        biz = kjgl_sync.rebuild_business()
+        docs = kjgl_sync.refresh_schema_docs()
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'同步失败: {e}'}), 500
+
+    cache_refreshed = False
+    if db_profile.current_name() == 'kjgl':
+        try:
+            context.refresh_schema_caches()
+            from modules.training.routes import invalidate_generator, session_cache
+            invalidate_generator()
+            session_cache.clear()
+            cache_refreshed = True
+        except Exception as e:
+            print(f'[WARN] 同步后缓存刷新失败: {e}')
+
+    total_rows = sum(t['rows'] for t in biz['tables'])
+    return jsonify({
+        'success': True,
+        'source': kjgl_sync.SOURCE_DB,
+        'target': kjgl_sync.TARGET_DB,
+        'table_count': len(biz['tables']),
+        'total_rows': total_rows,
+        'fk_count': biz['fk_added'],
+        'all_match': biz['all_match'],
+        'mismatched': biz['mismatched'],
+        'schema_docs': docs,
+        'cache_refreshed': cache_refreshed,
+        'duration_ms': biz['duration_ms'],
+    })

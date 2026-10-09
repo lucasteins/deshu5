@@ -97,8 +97,49 @@ export interface SkillChatStreamResult {
   [key: string]: unknown
 }
 
+/** 新一轮回复开始帧（自动执行 agent 循环中每轮一帧，首轮也有） */
+export interface SkillChatAssistantStartEvent {
+  assistant_start: true
+}
+
+/** 自动执行开始帧（agent 循环内，exec_start 为命令全文） */
+export interface SkillChatExecStartEvent {
+  exec_start: string
+  auto?: boolean
+}
+
+/** 自动执行终态帧（agent 循环内；与手动执行一样不带 done:true） */
+export interface SkillChatExecAutoDoneEvent {
+  exec_done: true
+  exit_code: number
+  message_id?: number | null
+  auto?: boolean
+}
+
 export type SkillChatStreamEvent =
   | SkillChatThinkingEvent
   | SkillChatContentEvent
+  | SkillChatAssistantStartEvent
+  | SkillChatExecStartEvent
+  | SkillChatExecOutEvent
+  | SkillChatExecAutoDoneEvent
   | SSEDoneFrame<SkillChatStreamResult>
   | SSEErrorFrame
+
+/* ---- 命令执行 SSE（POST /skillchat/execute/stream） ---- */
+
+/** 输出增量帧（stdout/stderr 逐行） */
+export interface SkillChatExecOutEvent {
+  exec_out: string
+}
+
+/** 终态帧：进程退出（exit_code 非 0 也是正常终态，不是 error 帧）。
+ *  注意：无 `done:true` 字段，useSSE 的 isDoneFrame 不会命中，
+ *  调用方需在 onEvent 里自行记录该帧，不能依赖 sse.status === 'done'。 */
+export interface SkillChatExecDoneEvent {
+  exec_done: true
+  exit_code: number
+  message_id: number
+}
+
+export type SkillChatExecEvent = SkillChatExecOutEvent | SkillChatExecDoneEvent | SSEErrorFrame

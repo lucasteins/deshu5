@@ -54,25 +54,25 @@ agent_created: true
 
 ## 快速开始
 
-```bash
-cd D:/codex/deshu5/skills/deshu5-data-simulation/scripts
-export MYSQL_PASSWORD=******
+以下命令均在项目根目录执行（密码自动读 `.env` 的 `MYSQL_PASSWORD`，无需 export），
+技能对话界面可直接自动执行：
 
+```bash
 # 0) 先看清楚要写什么，不落库
-python simulator.py --counties 1 --from 202501 --daily off --dry-run
+python skills/deshu5-data-simulation/scripts/simulator.py --counties 1 --from 202501 --daily off --dry-run
 
 # 1) 试跑 2 个区县，2025 年至今，日粒度只生成最近 3 个月
-python simulator.py --counties 2 --from 202501 --daily recent
+python skills/deshu5-data-simulation/scripts/simulator.py --counties 2 --from 202501 --daily recent
 
 # 2) 90 秒验证质量（关联 + 勾稽）
-python validate.py --tag 模拟
+python skills/deshu5-data-simulation/scripts/validate.py --tag 模拟
 
 # 3) 全量：96 个区县全跑
-python simulator.py --from 202501 --daily full
+python skills/deshu5-data-simulation/scripts/simulator.py --from 202501 --daily full
 
-# 4) 按台账精确回滚（只删本次生成的行）
-python simulator.py --purge --tag 模拟 --dry-run   # 先看清单
-python simulator.py --purge --tag 模拟             # 再执行
+# 4) 按台账精确回滚（只删本次生成的行）：先 --dry-run 看清单，确认后再去掉 --dry-run 执行
+python skills/deshu5-data-simulation/scripts/simulator.py --purge --tag 模拟 --dry-run
+python skills/deshu5-data-simulation/scripts/simulator.py --purge --tag 模拟
 ```
 
 ### 常用参数

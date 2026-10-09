@@ -263,3 +263,26 @@ export function importResourceItems(rtype: string, file: File): Promise<ImportRe
   fd.append('file', file)
   return api.post<ImportResponse>(`/resources/${rtype}/import`, fd)
 }
+
+/* ==================== kjgl 数据同步 ==================== */
+
+/** kjgl→kjgl01 同步结果（POST /api/resources/sync-kjgl01） */
+export interface KjglSyncResponse {
+  success: boolean
+  source: string
+  target: string
+  table_count: number
+  total_rows: number
+  fk_count: number
+  all_match: boolean
+  mismatched: { table: string; source: number; target: number }[]
+  schema_docs: { table_docs: number; column_docs: number; relationship_docs: number }
+  cache_refreshed: boolean
+  duration_ms: number
+  error?: string
+}
+
+/** 从 kjgl 生产库全量重同步到 kjgl01（仅写 kjgl01 系列库，源库只读） */
+export function syncKjgl01(): Promise<KjglSyncResponse> {
+  return api.post<KjglSyncResponse>('/resources/sync-kjgl01')
+}

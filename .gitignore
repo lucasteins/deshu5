@@ -28,6 +28,16 @@ skills/deshu5-data-simulation/scripts/manifest/
 # 仿真 skill 运行时状态指针（记录上次台账名，脚本自动重写，勿入库）
 skills/deshu5-data-simulation/scripts/_lastman.txt
 
+# 本体提炼 skill 运行时产物（LLM 草稿 / 体检报告，非源码）
+skills/ontology-distill/drafts/
+skills/ontology-distill/reports/
+
+# 科研谋划 skill 运行时产物（文献检索结果缓存，可再生）
+skills/research-planning/results/
+
+# academic-research-skills 第三方参考库（GitHub 下载，非本项目源码）
+skills/academic-research-skills/
+
 # 历史归档（清理移入的无用/测试文件，勿上传）
 history/
 
@@ -43,6 +53,8 @@ frontend/dist/
 app.log
 app.pid
 app_boot_test.log
+app_kjgl_boot.log
+kjgl研究谋划/
 演示汇报/
 前端重构/
 本地适配与修复记录.md

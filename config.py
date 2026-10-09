@@ -57,7 +57,8 @@ CODE_VALUE_ITEMS_FILE = os.environ.get(
     'CODE_VALUE_ITEMS_FILE', str(BASE_DIR / 'data' / 'code_value_items_v1.0.xlsx'))
 
 # ==================== 应用 ====================
-FLASK_PORT = int(os.environ.get('FLASK_PORT', '5000'))
+# 默认 5001：5000 常被本机 kjgl 后端占用；env FLASK_PORT 可覆盖
+FLASK_PORT = int(os.environ.get('FLASK_PORT', '5001'))
 FLASK_DEBUG = os.environ.get('FLASK_DEBUG', 'false').lower() in ('true', '1', 'yes')
 USE_INTENT_GENERATION = os.environ.get('USE_INTENT_GENERATION', 'true').lower() in ('true', '1', 'yes')
 
@@ -78,6 +79,8 @@ FULL_COLUMN_TOP_N = int(os.environ.get('FULL_COLUMN_TOP_N', '3'))
 USE_REASONING_FALLBACK = os.environ.get('USE_REASONING_FALLBACK', 'false').lower() in ('true', '1', 'yes')
 LLM_TIMEOUT_FAST = int(os.environ.get('LLM_TIMEOUT_FAST', '120'))
 LLM_TIMEOUT_REASONING = int(os.environ.get('LLM_TIMEOUT_REASONING', '60'))
+# 流式响应空闲看门狗：超过该秒数无 reasoning/content 增量即中断（防网关挂起，keepalive 不续命）
+LLM_STREAM_IDLE_TIMEOUT = int(os.environ.get('LLM_STREAM_IDLE_TIMEOUT', '240'))
 LLM_TIMEOUT_LOCATE = int(os.environ.get('LLM_TIMEOUT_LOCATE', '25'))
 LLM_LOCATE_WAIT_MAX = int(os.environ.get('LLM_LOCATE_WAIT_MAX', '15'))
 LLM_LOCATE_ENABLED = os.environ.get('LLM_LOCATE_ENABLED', 'false').lower() in ('true', '1', 'yes')

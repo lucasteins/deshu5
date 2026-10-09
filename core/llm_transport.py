@@ -72,6 +72,11 @@ def call_llm(prompt: str, user_question: str = None, max_tokens: int = 8000, thi
             full_content = []
             stream_fr = None
             last_flush = time.perf_counter()
+            # 空闲看门狗：只统计 reasoning/content 增量的到达时间。
+            # requests 的 read 超时管不到"keepalive 字节续命但无实际内容"的挂起，
+            # 网关排队/过载时连接上只有注释行也能让 iter_lines 一直转——必须按内容计时。
+            idle_limit = getattr(config, 'LLM_STREAM_IDLE_TIMEOUT', 240)
+            last_delta = time.perf_counter()
 
             def _flush(force=False):
                 nonlocal last_flush
@@ -89,10 +94,16 @@ def call_llm(prompt: str, user_question: str = None, max_tokens: int = 8000, thi
                             pass
 
             for raw in resp.iter_lines(decode_unicode=True):
+                now_line = time.perf_counter()
                 if not raw:
+                    if now_line - last_delta > idle_limit:
+                        raise ValueError(f'流式响应空闲超时（{idle_limit}s 无内容增量）')
                     continue
                 body = raw.strip()
                 if not body.startswith('data:'):
+                    # SSE 注释/keepalive 行：不重置空闲计时
+                    if now_line - last_delta > idle_limit:
+                        raise ValueError(f'流式响应空闲超时（{idle_limit}s 无内容增量）')
                     continue
                 body = body[5:].strip()
                 if body == '[DONE]':
@@ -112,6 +123,8 @@ def call_llm(prompt: str, user_question: str = None, max_tokens: int = 8000, thi
                 if dc:
                     parts['content'].append(dc)
                     full_content.append(dc)
+                if rc or dc:
+                    last_delta = now_line
                 _flush()
             _flush(force=True)
             content = ''.join(full_content)

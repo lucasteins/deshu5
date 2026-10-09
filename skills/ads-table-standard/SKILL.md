@@ -168,11 +168,12 @@ whenToUse: 在 fz01/sc01 新增统计报表表（ads_）、接入外部报表/�
 ### 6. 已接入的外部报表
 
 - 2024 年城市建设统计年鉴（试点）：`ads_urb_water_supply_nat_yr`（历年）、`ads_urb_water_supply_prov_yr`/`ads_urb_water_supply_city_yr`（供水省/市）、`ads_urb_sewage_prov_yr`/`ads_urb_sewage_city_yr`（排水污水省/市）；其余 42 个 sheet 待按同法扩展（燃气/供热/轨交/道路/市容/园林等主题，二级域按需增 Urb04+）
-- 浙江省统计局月度卡片（2025-02 ~ 2026-06；1 月源站不发月度卡片，故 202501/202601 缺）：14 张 `ads_tjj_<主题>_mon` 主题窄表（gdp/industry/transport/price/main/energy/retail/foreign/service/finance/employment/income/confidence/invest）；
+- 浙江省统计局月度卡片（2025-02 ~ 2026-07；1 月源站不发月度卡片，故 202501/202601 缺）：14 张 `ads_tjj_<主题>_mon` 主题窄表（gdp/industry/transport/price/main/energy/retail/foreign/service/finance/employment/income/confidence/invest）；
   抓取链路 `tools/crawl_tjj_monthly.py`（mgop h5 网关，sign=md5("token=&ak=..&api=..&ts=..&data=null") 免 token，
   源站 WAF 拦非浏览器 UA → 经 Playwright 驱动本机 Chrome 发请求；一主题一报告期一次取全表 HTML；
   支持 `--from yyyymm --to yyyymm` 区间增量抓取（bgq 形为 YYYY00MM）；**增量入库**：CREATE TABLE IF NOT EXISTS + 按本次报告期 DELETE 重插，不 DROP（2026-09 起，用户要求保留其他期间存量）；
   注意：社零主题 ztCode 逐月不定（13 或 21）脚本两者都试；重名列头自动加前驱限定如"6月-同比±%"）；
+  **单主题偶发抓取抖动**（连续请求中某主题返回 0 表但源站有数据，如 202607 财政金融首跑 0 表、复跑 +172 行）——入库后某主题 0 行时先按报告期复跑一次再定性，勿当源站无数据；
   结构为两轴混合维度窄表：region_* 整表默认浙江省（330000/省），dim_name 仅放科目（地区行为空）
 
 

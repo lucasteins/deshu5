@@ -10,13 +10,14 @@ import { ElInput, ElOption, ElSelect } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import type { SchemaNode } from '@/api/resources'
 import DsAsyncSection from '@/components/status/DsAsyncSection.vue'
+import KjglSyncButton from './KjglSyncButton.vue'
 
 const props = defineProps<{
   nodes: SchemaNode[]
   loading: boolean
   error: unknown
 }>()
-const emit = defineEmits<{ open: [table: string]; retry: [] }>()
+const emit = defineEmits<{ open: [table: string]; retry: []; synced: [] }>()
 
 const kw = ref('')
 const layer = ref('')
@@ -59,6 +60,7 @@ function pkText(n: SchemaNode): string {
         <ElOption label="事实表 dwd" value="dwd" />
       </ElSelect>
       <span class="catalog-count">共 {{ filtered.length }} 张表 · {{ totalCols }} 个字段</span>
+      <KjglSyncButton @synced="emit('synced')" />
     </div>
 
     <DsAsyncSection

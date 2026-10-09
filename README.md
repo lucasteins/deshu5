@@ -114,7 +114,7 @@ pip install -r requirements.txt
 
 # 启动
 start.bat        # 或 python app.py
-# 访问 http://127.0.0.1:5000
+# 访问 http://127.0.0.1:5001（默认端口 5001，env FLASK_PORT 可改）
 ```
 
 配置项（MySQL 连接 / LLM Key / Prompt 预算等）均可通过根目录 `.env` 覆盖；

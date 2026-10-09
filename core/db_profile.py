@@ -6,6 +6,8 @@
   真实数据基线 = fz01 剔除仿真后的 71,992 行（120 表）
 - 仿真档位 fz01：fz01 / fz01_governance / fz01_governance（日志并治理库）/ fz01_ontology
   含全部仿真数据（2,425,404 行），供回滚与对照
+- 科技管理档位 kjgl01：kjgl01 / kjgl01_governance / kjgl01_log / kjgl01_ontology
+  kjgl 系统业务库的只读问数副本（tools/bootstrap_kjgl01.py 引导，可 --rebuild 重同步）
 - 档位 key（production/staging）保持不变，避免破坏 db_profile.json 与前端切换接口
 - 持久化：根目录 db_profile.json（gitignore）；环境变量 DB_PROFILE 优先
 - 连接层（core/database.py）在每次建立连接时读取 current()，切换即时生效
@@ -30,6 +32,15 @@ PROFILES = {
         'governance': os.environ.get('STAGING_DB_GOVERNANCE', 'fz01_governance'),
         'log': os.environ.get('STAGING_DB_LOG', 'fz01_governance'),
         'ontology': os.environ.get('STAGING_DB_ONTOLOGY', 'fz01_ontology'),
+    },
+    # 科技管理库 kjgl01：kjgl 系统业务库的只读副本（tools/bootstrap_kjgl01.py 引导），
+    # 独立于 sc01/fz01 系列，治理/日志/本体库均独立成库
+    'kjgl': {
+        'label': '科技管理库 kjgl01',
+        'business': os.environ.get('KJGL_DB_BUSINESS', 'kjgl01'),
+        'governance': os.environ.get('KJGL_DB_GOVERNANCE', 'kjgl01_governance'),
+        'log': os.environ.get('KJGL_DB_LOG', 'kjgl01_log'),
+        'ontology': os.environ.get('KJGL_DB_ONTOLOGY', 'kjgl01_ontology'),
     },
 }
 

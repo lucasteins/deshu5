@@ -7,7 +7,13 @@
  *       消息流（user 右 / assistant 左气泡，assistant 用 renderMarkdown 渲染，
  *       流式期间 DsThinkingPanel 思考流 + 正文增量，useAutoScroll 跟底）、
  *       底部输入框（Enter 发送 / Shift+Enter 换行，流式中禁用发送）。
- * SSE：POST /api/skillchat/chat/stream（{thinking} / {content} 增量帧 + done / error 终帧），
+ * 命令执行：后端 agent 循环会自动执行回复中 ```bash 块里过白名单的命令并回填结果
+ * （{assistant_start} 新一轮气泡 / {exec_start} 插流式执行卡 / {exec_out} 输出增量 /
+ * {exec_done} 封板）；assistant 正文里的可执行命令仍渲染「可执行命令」条，
+ * 点击手动执行走独立 useSSE 实例 POST /api/skillchat/execute/stream；
+ * 同一时刻只允许一个手动执行。
+ * 历史 role='exec' 消息渲染为只读执行结果卡（默认折叠）。
+ * SSE：POST /api/skillchat/chat/stream（{thinking} / {content} 增量帧 + 自动执行帧 + done / error 终帧），
  * 卸载时 abort。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -30,6 +36,7 @@ import {
   fetchSessions,
   fetchSkills,
   refreshExamples,
+  type SkillChatExecEvent,
   type SkillChatSession,
   type SkillChatSkill,
   type SkillChatStreamEvent,
@@ -66,6 +73,10 @@ function selectSkill(name: string) {
   if (name === currentSkill.value) return
   if (sending.value) {
     toast.warning('正在生成回复，请先等待完成或停止生成')
+    return
+  }
+  if (runningExecKey.value) {
+    toast.warning('有命令正在执行，请先等待完成')
     return
   }
   currentSkill.value = name
@@ -151,6 +162,10 @@ async function selectSession(s: SkillChatSession) {
     toast.warning('正在生成回复，请先等待完成或停止生成')
     return
   }
+  if (runningExecKey.value) {
+    toast.warning('有命令正在执行，请先等待完成')
+    return
+  }
   activeSessionId.value = s.id
   messages.value = []
   thinkingText.value = ''
@@ -160,8 +175,14 @@ async function selectSession(s: SkillChatSession) {
     if (!res.success) throw new Error('会话加载失败')
     messages.value = (res.messages || []).map((m) => ({
       key: `m${m.id}`,
-      role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
+      role:
+        m.role === 'user'
+          ? ('user' as const)
+          : m.role === 'exec'
+            ? ('exec' as const)
+            : ('assistant' as const),
       content: m.content,
+      expanded: false,
     }))
     void nextTick(() => jumpToBottom())
   } catch (e) {
@@ -203,12 +224,14 @@ function fmtTime(s?: string): string {
 /* ================= 消息流与 SSE ================= */
 interface UiMessage {
   key: string
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'exec'
   content: string
   /** 流式中（思考面板 + 正文增量 + 光标） */
   streaming?: boolean
   /** SSE 错误终态 */
   failed?: boolean
+  /** exec 历史结果卡：输出区展开态（默认折叠） */
+  expanded?: boolean
 }
 
 const messages = ref<UiMessage[]>([])
@@ -218,11 +241,58 @@ const sending = ref(false)
 /** 当前流式回复的思考增量（仅流式期间展示，完成后收起） */
 const thinkingText = ref('')
 let msgSeq = 0
+/** 自动执行期间对应的流式 exec 消息 key（exec_out/exec_done 帧据此定位） */
+let autoExecKey: string | null = null
 
 const sse = useSSE<SkillChatStreamEvent, SkillChatStreamResult>('/skillchat/chat/stream', {
   onEvent: (evt) => {
     if ('thinking' in evt && typeof evt.thinking === 'string') {
       thinkingText.value += evt.thinking
+      scrollAfterTick()
+    } else if ('assistant_start' in evt) {
+      // agent 循环新一轮：上一轮气泡已有内容则封板，另开一个流式气泡
+      const last = messages.value[messages.value.length - 1]
+      if (last && last.role === 'assistant' && last.streaming && last.content) {
+        last.streaming = false
+        messages.value.push({ key: `a${++msgSeq}`, role: 'assistant', content: '', streaming: true })
+      }
+      thinkingText.value = ''
+      autoExecKey = null
+      scrollAfterTick()
+    } else if ('exec_start' in evt && typeof evt.exec_start === 'string') {
+      // 自动执行：插入流式执行卡（复用 exec 历史卡渲染，展开态）
+      const key = `e${++msgSeq}`
+      autoExecKey = key
+      messages.value.push({
+        key,
+        role: 'exec',
+        content: `$ ${evt.exec_start}\n`,
+        expanded: true,
+        streaming: true,
+      })
+      scrollAfterTick()
+    } else if ('exec_out' in evt && typeof evt.exec_out === 'string') {
+      const m = autoExecKey ? messages.value.find((x) => x.key === autoExecKey) : undefined
+      if (m) {
+        m.content += evt.exec_out
+        if (m.content.length > EXEC_OUTPUT_MAX) {
+          const nl = m.content.indexOf('\n')
+          m.content = m.content.slice(0, nl + 1) + m.content.slice(-EXEC_OUTPUT_MAX)
+        }
+      }
+      scrollAfterTick()
+    } else if ('exec_done' in evt && evt.exec_done === true) {
+      // 自动执行终态：把「$ cmd\n<输出>」封板为「$ cmd\n[exit N]\n<输出>」
+      const m = autoExecKey ? messages.value.find((x) => x.key === autoExecKey) : undefined
+      if (m) {
+        const nl = m.content.indexOf('\n')
+        const head = nl === -1 ? m.content : m.content.slice(0, nl)
+        const rest = nl === -1 ? '' : m.content.slice(nl + 1)
+        const code = typeof evt.exit_code === 'number' ? evt.exit_code : -1
+        m.content = `${head}\n[exit ${code}]\n${rest}`
+        m.streaming = false
+      }
+      autoExecKey = null
       scrollAfterTick()
     } else if ('content' in evt && typeof evt.content === 'string') {
       const last = messages.value[messages.value.length - 1]
@@ -282,18 +352,19 @@ async function sendMessage(raw: string) {
     await sse.start({ skill: currentSkill.value, session_id: sid, message: content })
   } finally {
     sending.value = false
-    const last = messages.value[messages.value.length - 1]
-    if (last?.streaming) last.streaming = false
+    for (const m of messages.value) if (m.streaming) m.streaming = false
+    autoExecKey = null
   }
 
   const last = messages.value[messages.value.length - 1]
   if (sse.status.value === 'done') {
-    // 以 done 帧完整内容为准（与增量拼接等价，兜底丢帧）
-    if (last && sse.result.value?.content) last.content = sse.result.value.content
+    // 以 done 帧完整内容为准（最后一轮气泡；与增量拼接等价，兜底丢帧）
+    if (last && last.role === 'assistant' && sse.result.value?.content)
+      last.content = sse.result.value.content
     // 标题 / updated_at / message_count 由后端更新，重拉列表
     void loadSessions()
   } else if (sse.status.value === 'error') {
-    if (last) last.failed = true
+    if (last && last.role === 'assistant') last.failed = true
     toast.danger({ title: '回复生成失败', desc: sse.error.value?.message || '流式响应中断' })
   }
   // aborted：保留已生成的部分内容
@@ -316,7 +387,145 @@ function onEnterKey(e: KeyboardEvent) {
   submitInput()
 }
 
-onBeforeUnmount(() => sse.abort())
+/* ================= 命令执行 ================= */
+/** 命令白名单：与后端 parse_exec_command 同规则（脚本头校验，参数由后端 shlex 解析放行引号） */
+const EXEC_SCRIPT_RE = /^(tools|skills)\/[A-Za-z0-9_\-./]+\.py$/
+const BASH_BLOCK_RE = /```(?:bash|sh|shell)[^\S\n]*\n([\s\S]*?)```/g
+/** 执行卡输出上限（字符），超出保留尾部 */
+const EXEC_OUTPUT_MAX = 20000
+
+function isExecCommand(line: string): boolean {
+  const parts = line.trim().split(/\s+/)
+  if (parts.length < 2 || parts[0] !== 'python') return false
+  const script = parts[1].replace(/\\/g, '/')
+  return EXEC_SCRIPT_RE.test(script) && !script.includes('..')
+}
+
+/** 提取 assistant 正文中全部可执行命令：逐行过白名单，跳过空行与 # 注释行 */
+function extractExecCommands(content: string): string[] {
+  const cmds: string[] = []
+  for (const match of content.matchAll(BASH_BLOCK_RE)) {
+    for (const raw of (match[1] ?? '').split('\n')) {
+      const l = raw.trim()
+      if (!l || l.startsWith('#')) continue
+      if (isExecCommand(l)) cmds.push(l)
+    }
+  }
+  return cmds
+}
+
+interface ExecCard {
+  command: string
+  status: 'running' | 'done' | 'error'
+  exitCode: number | null
+  output: string
+  error: string
+}
+
+/** 执行卡按「消息 key:命令序号」存放；同一时刻只允许一个执行 */
+const execCards = ref<Record<string, ExecCard>>({})
+const runningExecKey = ref<string | null>(null)
+let activeExecKey: string | null = null
+/** exec_done 终态帧不带 done:true，useSSE 识别不到，需自行记录（见 api/skillchat.ts 注释） */
+let execDoneSeen = false
+
+const execPreEls = new Map<string, HTMLElement>()
+function setExecPreEl(key: string, el: unknown) {
+  if (el instanceof HTMLElement) execPreEls.set(key, el)
+  else execPreEls.delete(key)
+}
+
+function execCardList(msgKey: string, idx: number): ExecCard[] {
+  const card = execCards.value[`${msgKey}:${idx}`]
+  return card ? [card] : []
+}
+
+function scrollExecOutput() {
+  void nextTick(() => {
+    const el = activeExecKey ? execPreEls.get(activeExecKey) : null
+    if (el) el.scrollTop = el.scrollHeight
+    notify()
+  })
+}
+
+const execSse = useSSE<SkillChatExecEvent, null>('/skillchat/execute/stream', {
+  onEvent: (evt) => {
+    const card = activeExecKey ? execCards.value[activeExecKey] : undefined
+    if (!card) return
+    if ('exec_out' in evt && typeof evt.exec_out === 'string') {
+      card.output += evt.exec_out
+      if (card.output.length > EXEC_OUTPUT_MAX) card.output = card.output.slice(-EXEC_OUTPUT_MAX)
+      scrollExecOutput()
+    } else if ('exec_done' in evt && evt.exec_done === true) {
+      execDoneSeen = true
+      card.status = 'done'
+      card.exitCode = typeof evt.exit_code === 'number' ? evt.exit_code : null
+      scrollAfterTick()
+    } else if ('error' in evt && typeof evt.error === 'string') {
+      card.status = 'error'
+      card.error = evt.error
+      scrollAfterTick()
+    }
+  },
+})
+
+async function runExecCommand(msgKey: string, cmdIndex: number, command: string) {
+  if (runningExecKey.value) return
+  if (!activeSessionId.value) {
+    toast.warning('当前没有会话，无法执行命令')
+    return
+  }
+  const key = `${msgKey}:${cmdIndex}`
+  execCards.value = {
+    ...execCards.value,
+    [key]: { command, status: 'running', exitCode: null, output: '', error: '' },
+  }
+  runningExecKey.value = key
+  activeExecKey = key
+  execDoneSeen = false
+  scrollAfterTick()
+  try {
+    await execSse.start({ session_id: activeSessionId.value, command })
+  } finally {
+    runningExecKey.value = null
+    activeExecKey = null
+  }
+  const card = execCards.value[key]
+  if (!card) return
+  if (execDoneSeen) {
+    // 后端已持久化 role='exec' 消息并更新 updated_at；重拉会话列表即可，消息由执行卡呈现
+    void loadSessions()
+  } else if (card.status === 'running') {
+    // 未收到任何终帧：HTTP 400/404/409（非 SSE）或流中断
+    card.status = 'error'
+    card.error = execSse.error.value?.message || '执行流中断'
+  }
+  scrollAfterTick()
+}
+
+/** 历史 role='exec' 消息正文："$ <command>\n[exit <code>]\n<stdout 尾部>" */
+interface ExecHistory {
+  command: string
+  exitCode: number | null
+  output: string
+}
+
+function parseExecMessage(content: string): ExecHistory {
+  const nl = content.indexOf('\n')
+  const firstLine = nl === -1 ? content : content.slice(0, nl)
+  const rest = nl === -1 ? '' : content.slice(nl + 1)
+  const m = rest.match(/^\[exit (-?\d+)\]\n?/)
+  return {
+    command: firstLine.replace(/^\$\s?/, ''),
+    exitCode: m ? Number(m[1]) : null,
+    output: m ? rest.slice(m[0].length) : rest,
+  }
+}
+
+onBeforeUnmount(() => {
+  sse.abort()
+  execSse.abort()
+})
 </script>
 
 <template>
@@ -421,16 +630,99 @@ onBeforeUnmount(() => sse.abort())
             <div v-if="messagesLoading" class="sc-hint">加载中…</div>
             <template v-else-if="messages.length">
               <div v-for="m in messages" :key="m.key" class="msg-row" :class="m.role">
-                <div class="msg-bubble">
-                  <template v-if="m.role === 'assistant'">
-                    <div v-if="m.streaming && thinkingText" class="msg-thinking">
-                      <DsThinkingPanel :entries="[]" :streams="thinkingStreams" />
+                <div class="msg-col">
+                  <!-- 历史 exec 消息：只读执行结果卡（默认折叠），不走 renderMarkdown -->
+                  <div v-if="m.role === 'exec'" class="exec-card exec-card--history">
+                    <div class="exec-card-head clickable" @click="m.expanded = !m.expanded">
+                      <code class="exec-cmd-text">$ {{ parseExecMessage(m.content).command }}</code>
+                      <span
+                        class="exec-badge"
+                        :class="
+                          parseExecMessage(m.content).exitCode === 0
+                            ? 'is-ok'
+                            : parseExecMessage(m.content).exitCode === null
+                              ? ''
+                              : 'is-bad'
+                        "
+                      >
+                        exit {{ parseExecMessage(m.content).exitCode ?? '—' }}
+                      </span>
+                      <span class="exec-toggle">{{ m.expanded ? '收起 ▲' : '展开 ▼' }}</span>
                     </div>
-                    <div v-if="m.content" class="doc-md" v-html="renderMarkdown(m.content)" />
-                    <span v-if="m.streaming" class="msg-caret" />
-                    <div v-if="m.failed" class="msg-failed">生成失败，请重试</div>
+                    <pre v-if="m.expanded" class="exec-output">{{
+                      parseExecMessage(m.content).output || '(无输出)'
+                    }}</pre>
+                  </div>
+                  <template v-else>
+                    <div class="msg-bubble">
+                      <template v-if="m.role === 'assistant'">
+                        <div v-if="m.streaming && thinkingText" class="msg-thinking">
+                          <DsThinkingPanel :entries="[]" :streams="thinkingStreams" />
+                        </div>
+                        <div v-if="m.content" class="doc-md" v-html="renderMarkdown(m.content)" />
+                        <span v-if="m.streaming" class="msg-caret" />
+                        <div v-if="m.failed" class="msg-failed">生成失败，请重试</div>
+                      </template>
+                      <template v-else>{{ m.content }}</template>
+                    </div>
+                    <!-- 可执行命令条：```bash 块逐行过白名单，有命中即出现 -->
+                    <div
+                      v-if="m.role === 'assistant' && !m.streaming && extractExecCommands(m.content).length"
+                      class="exec-strip"
+                    >
+                      <div class="exec-strip-title">可执行命令</div>
+                      <div
+                        v-for="(cmd, ci) in extractExecCommands(m.content)"
+                        :key="ci"
+                        class="exec-cmd-block"
+                      >
+                        <div class="exec-cmd-row">
+                          <code class="exec-cmd-text">{{ cmd }}</code>
+                          <button
+                            class="btn-sm exec-run-btn"
+                            type="button"
+                            :disabled="!!runningExecKey"
+                            @click="runExecCommand(m.key, ci, cmd)"
+                          >
+                            ▶ 执行
+                          </button>
+                        </div>
+                        <!-- 执行卡：运行中 spinner / 退出码徽标 / 输出跟底 -->
+                        <div v-for="card in execCardList(m.key, ci)" :key="card.command" class="exec-card">
+                          <div class="exec-card-head">
+                            <span v-if="card.status === 'running'" class="exec-spinner" />
+                            <span
+                              v-else-if="card.status === 'done'"
+                              class="exec-badge"
+                              :class="card.exitCode === 0 ? 'is-ok' : 'is-bad'"
+                            >
+                              exit {{ card.exitCode ?? '—' }}
+                            </span>
+                            <span v-else class="exec-badge is-bad">执行失败</span>
+                            <span class="exec-card-status">
+                              {{
+                                card.status === 'running'
+                                  ? '运行中…'
+                                  : card.status === 'done'
+                                    ? card.exitCode === 0
+                                      ? '执行成功'
+                                      : '执行失败'
+                                    : '执行失败'
+                              }}
+                            </span>
+                          </div>
+                          <pre
+                            v-if="card.output"
+                            class="exec-output"
+                            :ref="(el) => setExecPreEl(`${m.key}:${ci}`, el)"
+                          >{{ card.output }}</pre>
+                          <div v-if="card.status === 'error' && card.error" class="exec-error">
+                            {{ card.error }}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </template>
-                  <template v-else>{{ m.content }}</template>
                 </div>
               </div>
             </template>
@@ -720,8 +1012,14 @@ onBeforeUnmount(() => sse.abort())
 .msg-row.user {
   justify-content: flex-end;
 }
-.msg-bubble {
+.msg-col {
   max-width: 78%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.msg-bubble {
   padding: 10px 14px;
   border-radius: var(--r-md);
   font-size: 14px;
@@ -765,6 +1063,131 @@ onBeforeUnmount(() => sse.abort())
 }
 .msg-failed {
   margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+/* ---- 命令执行（命令条 / 执行卡 / 历史 exec 卡） ---- */
+.exec-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+}
+.exec-strip-title {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.exec-cmd-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.exec-cmd-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.exec-cmd-text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-1);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.exec-run-btn {
+  flex: none;
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+.exec-run-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.exec-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--r-sm);
+  background: var(--sunken);
+}
+.exec-card--history {
+  background: var(--surface-1);
+  border-color: var(--line);
+}
+.exec-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.exec-card-head.clickable {
+  cursor: pointer;
+}
+.exec-card-status {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.exec-badge {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: var(--r-full);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.exec-badge.is-ok {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.exec-badge.is-bad {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.exec-toggle {
+  margin-left: auto;
+  flex: none;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.exec-spinner {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: exec-spin 800ms linear infinite;
+}
+@keyframes exec-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.exec-output {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: var(--r-xs);
+  background: var(--surface-1);
+  border: 1px solid var(--line-subtle);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-1);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.exec-error {
   font-size: 12.5px;
   color: var(--danger);
 }

@@ -79,6 +79,7 @@ function navigateTable(t: string) {
       :error="error"
       @open="openTable"
       @retry="loadGraph"
+      @synced="loadGraph"
     />
     <GraphView
       v-else-if="activeTab === 'graph'"
