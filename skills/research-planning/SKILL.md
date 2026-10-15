@@ -42,6 +42,7 @@ python skills/research-planning/scripts/search_nature.py q=AI_data_centre_carbon
 python skills/research-planning/scripts/show_template.py survey
 python skills/research-planning/scripts/show_template.py requirements
 python skills/research-planning/scripts/show_template.py planning
+python skills/research-planning/scripts/show_template.py review
 python skills/research-planning/scripts/show_template.py common
 ```
 
@@ -51,14 +52,19 @@ python skills/research-planning/scripts/show_template.py common
 python skills/research-planning/scripts/compose_doc.py type=survey title=能源算电碳协同前沿综述
 python skills/research-planning/scripts/compose_doc.py type=requirements title=下阶段科技需求清单
 python skills/research-planning/scripts/compose_doc.py type=planning title=研究方向谋划报告
+python skills/research-planning/scripts/compose_doc.py type=review title=《某需求》需求先进性审查报告 target=kjgl研究谋划/inbox/xxx.md
 ```
+
+`type=review`（先进性审查报告）额外要求：先经 `python tools/save_text.py <文件名.md> <需求原文>`
+把审查对象暂存到 `kjgl研究谋划/inbox/`，再用 `target=` 指向该文件；title 用
+`《需求名》需求先进性审查报告`。审查前应先完成相关主题的三路检索。
 
 `topics=主题1,主题2` 可限定只用指定主题的检索结果；缺省用全部。kjgl 业务底数自动读取
 `kjgl研究谋划/kjgl_base.json`（项目库+规划需求清单）。
 
 ### 格式硬约束（回答用户时也必须遵守的要点）
 
-1. **文档头**：文档编号（KJGL-ZS/XQ/MH-年份-序号）、密级、编制单位、日期、版本。
+1. **文档头**：文档编号（KJGL-ZS/XQ/MH/SC-年份-序号）、密级、编制单位、日期、版本。
 2. **章节编号**：一、（一）、1.、（1）四级；一级章用 `##`，禁止 `###`。
 3. **图表**：表 n / 图 n 连续编号，表题在表上方。
 4. **引用**：一律 `[n]` 编号，对应文末《参考文献》；**每条引用必须来自检索结果库**，

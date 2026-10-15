@@ -2,8 +2,9 @@
 /**
  * 智能问答（F2.1 流式叙事首秀）——设计稿 §4.5.1「深入设计 · 智能问答」+ §4.4.4「流式输出叙事」。
  *
- * 三页签（历史会话 / 我的提问模板）由 AppShell 的 TabBar 经 URL `#tab=` 驱动；
- * 旧实现（static/js/app.js）无这两个页签，故按「简态」保留结构 + 空态（不造假）。
+ * 三页签（对话 / 历史会话 / 我的提问模板）由 AppShell 的 TabBar 经 URL `#tab=` 驱动；
+ * 历史会话数据源为日志库 generation_logs（每次生成落一条），支持搜索 / 状态过滤 /
+ * 详情回看（SQL + 执行结果预览）/ 再次提问 / 删除；提问模板暂为简态空态。
  *
  * 流式链路：
  *   POST /api/generate-sql-stream（useSSE）
@@ -11,7 +12,7 @@
  *     thinking×11（含 llm_stream 逐字）→ 思考窗口（分类渲染 + 逐字流）
  *     done/error → SQL 打字机着色 + 结果联动 + 收束条
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElButton } from 'element-plus'
 import { useSSE } from '@/composables'
 import type { QaStreamEvent, QaStreamResult, QaStage, QaThinking } from '@/types'
@@ -21,6 +22,7 @@ import {
   DsSqlViewer,
   DsStepRail,
   DsThinkingPanel,
+  confirm,
   formatSql,
   toast,
   thinkingToEntry,
@@ -29,7 +31,16 @@ import {
   type ThinkingEntry,
   type ThinkingStream,
 } from '@/components'
-import { asQaResult, saveQa, type QaResult } from '@/api/chat'
+import {
+  asQaResult,
+  saveQa,
+  listQaHistory,
+  getQaHistoryDetail,
+  deleteQaHistory,
+  type QaResult,
+  type QaHistoryItem,
+  type QaHistoryDetail,
+} from '@/api/chat'
 
 /* ================= 页签（URL #tab 驱动） ================= */
 const activeTab = ref<'chat' | 'history' | 'templates'>('chat')
@@ -188,6 +199,8 @@ async function submit() {
     if (r && !r.success) {
       streamError.value = r.error || '生成失败'
     }
+    // 新一轮问答已落 generation_logs，历史页签下次进入时重载
+    histLoaded.value = false
   } else if (sse.status.value === 'error') {
     streamError.value = sse.error.value?.message || '流式响应中断'
   }
@@ -281,6 +294,133 @@ function cellClass(v: string | number | null): string {
 function cellText(v: string | number | null): string {
   return v === null ? 'NULL' : String(v)
 }
+
+/* ================= 历史会话（generation_logs 回看） ================= */
+const HIST_PER_PAGE = 15
+const HIST_STATUS_FILTERS = [
+  { value: '', label: '全部' },
+  { value: 'success', label: '成功' },
+  { value: 'failed', label: '失败' },
+] as const
+
+const histItems = ref<QaHistoryItem[]>([])
+const histTotal = ref(0)
+const histPage = ref(1)
+const histQ = ref('')
+const histStatus = ref('')
+const histLoading = ref(false)
+const histError = ref('')
+const histLoaded = ref(false)
+const histSelectedId = ref<number | null>(null)
+const histDetail = ref<QaHistoryDetail | null>(null)
+const histDetailLoading = ref(false)
+
+const histPages = computed(() => Math.max(1, Math.ceil(histTotal.value / HIST_PER_PAGE)))
+const histPreview = computed(() => histDetail.value?.result_preview ?? null)
+const histPreviewHeaders = computed(() => histPreview.value?.headers ?? [])
+const histPreviewRows = computed(() => histPreview.value?.rows ?? [])
+
+function fmtHistTime(s: string): string {
+  return (s || '').replace('T', ' ').slice(0, 16)
+}
+
+async function loadHistory(page = histPage.value) {
+  histLoading.value = true
+  histError.value = ''
+  try {
+    const res = await listQaHistory({
+      page,
+      per_page: HIST_PER_PAGE,
+      q: histQ.value.trim() || undefined,
+      status: histStatus.value || undefined,
+    })
+    histItems.value = res.items
+    histTotal.value = res.total
+    histPage.value = res.page
+    histLoaded.value = true
+    // 当前选中项已不在本页（翻页/删除/过滤）时清空详情
+    if (histSelectedId.value !== null && !res.items.some((it) => it.id === histSelectedId.value)) {
+      histSelectedId.value = null
+      histDetail.value = null
+    }
+  } catch (e) {
+    histError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    histLoading.value = false
+  }
+}
+
+function onHistSearch() {
+  histPage.value = 1
+  void loadHistory(1)
+}
+
+function onHistStatus(v: string) {
+  if (histStatus.value === v) return
+  histStatus.value = v
+  histPage.value = 1
+  void loadHistory(1)
+}
+
+async function selectHistory(it: QaHistoryItem) {
+  if (histSelectedId.value === it.id && histDetail.value) return
+  histSelectedId.value = it.id
+  histDetailLoading.value = true
+  try {
+    const res = await getQaHistoryDetail(it.id)
+    histDetail.value = res.item
+  } catch (e) {
+    histDetail.value = null
+    toast.danger({ title: '详情加载失败', desc: e instanceof Error ? e.message : String(e) })
+  } finally {
+    histDetailLoading.value = false
+  }
+}
+
+/** 再次提问：把历史问题带回对话页签并直接发起生成 */
+function reask(d: QaHistoryDetail) {
+  question.value = d.question
+  window.location.hash = 'tab=chat'
+  void submit()
+}
+
+async function copyHistorySql() {
+  const sql = histDetail.value?.generated_sql
+  if (!sql) return
+  try {
+    await navigator.clipboard.writeText(formatSql(sql))
+    toast.success('SQL 已复制')
+  } catch {
+    toast.danger({ title: '复制失败', desc: '浏览器未授予剪贴板权限' })
+  }
+}
+
+async function onHistDelete(d: QaHistoryDetail) {
+  const ok = await confirm.l1({
+    title: '删除历史会话',
+    message: `即将删除「${d.question.slice(0, 30)}${d.question.length > 30 ? '…' : ''}」这条历史记录，此操作不可撤销。`,
+    confirmText: '删除',
+    danger: true,
+  })
+  if (!ok) return
+  try {
+    await deleteQaHistory(d.id)
+    toast.success('历史会话已删除')
+    histSelectedId.value = null
+    histDetail.value = null
+    await loadHistory()
+  } catch (e) {
+    toast.danger({ title: '删除失败', desc: e instanceof Error ? e.message : String(e) })
+  }
+}
+
+// 进入历史页签时按需加载（仅首次或数据过期后）
+watch(activeTab, (t) => {
+  if (t === 'history' && !histLoaded.value) void loadHistory(1)
+})
+onMounted(() => {
+  if (activeTab.value === 'history') void loadHistory(1)
+})
 
 /* ================= 自动滚动（左栏） ================= */
 const { containerRef, showJump, notify, jumpToBottom } = useAutoScroll()
@@ -413,13 +553,124 @@ onBeforeUnmount(() => {
       </aside>
     </div>
 
-    <!-- 历史会话（简态空态：旧实现无此功能） -->
-    <div v-else-if="activeTab === 'history'" class="qa-tab-page">
-      <DsEmpty
-        type="no-data"
-        title="还没有历史会话"
-        desc="完成一次智能问答后，会话将沉淀在这里供回看"
-      />
+    <!-- 历史会话：左列表 + 右详情 -->
+    <div v-else-if="activeTab === 'history'" class="qa-history">
+      <section class="qa-card hist-list-card">
+        <div class="qa-card-hd">
+          <h3>历史会话</h3>
+          <span class="meta">共 {{ histTotal }} 条</span>
+        </div>
+        <div class="hist-toolbar">
+          <input
+            v-model="histQ"
+            class="hist-search"
+            placeholder="搜索问题关键词，Enter 检索"
+            spellcheck="false"
+            @keydown.enter.prevent="onHistSearch"
+          />
+          <div class="hist-filters">
+            <button
+              v-for="f in HIST_STATUS_FILTERS"
+              :key="f.value"
+              class="hist-filter"
+              :class="{ active: histStatus === f.value }"
+              type="button"
+              @click="onHistStatus(f.value)"
+            >{{ f.label }}</button>
+            <button class="hist-filter" type="button" @click="loadHistory()">刷新</button>
+          </div>
+        </div>
+        <div v-if="histError" class="hist-state hist-state--error">
+          加载失败：{{ histError }}
+          <button type="button" @click="loadHistory()">重试</button>
+        </div>
+        <div v-else-if="histLoading" class="hist-state">加载中…</div>
+        <div v-else-if="!histItems.length" class="hist-state">
+          {{ histQ || histStatus ? '没有符合条件的历史会话' : '还没有历史会话，完成一次智能问答后会沉淀在这里' }}
+        </div>
+        <template v-else>
+          <ul class="hist-list">
+            <li
+              v-for="it in histItems"
+              :key="it.id"
+              class="hist-item"
+              :class="{ active: histSelectedId === it.id }"
+              @click="selectHistory(it)"
+            >
+              <div class="hist-q">{{ it.question }}</div>
+              <div class="hist-meta">
+                <span class="tag" :class="it.execution_status === 'success' ? 'tag-success' : 'tag-danger'">
+                  {{ it.execution_status === 'success' ? '成功' : '失败' }}
+                </span>
+                <span>{{ fmtHistTime(it.created_at) }}</span>
+                <span v-if="it.row_count != null">{{ it.row_count }} 行</span>
+                <span class="tabular">{{ (it.latency_ms / 1000).toFixed(1) }}s</span>
+                <span v-if="it.user_judgment" class="hist-judge">已判断：{{ it.user_judgment }}</span>
+              </div>
+            </li>
+          </ul>
+          <div class="hist-pager">
+            <button class="btn-sm" type="button" :disabled="histPage <= 1" @click="loadHistory(histPage - 1)">上一页</button>
+            <span class="meta tabular">{{ histPage }} / {{ histPages }}</span>
+            <button class="btn-sm" type="button" :disabled="histPage >= histPages" @click="loadHistory(histPage + 1)">下一页</button>
+          </div>
+        </template>
+      </section>
+
+      <section class="qa-card hist-detail-card">
+        <div v-if="histDetailLoading" class="hist-state">加载详情…</div>
+        <template v-else-if="histDetail">
+          <div class="qa-card-hd">
+            <h3>会话详情</h3>
+            <span class="meta">{{ fmtHistTime(histDetail.created_at) }}</span>
+          </div>
+          <div class="qa-card-bd">
+            <div class="hist-detail-q">{{ histDetail.question }}</div>
+            <div class="hist-detail-meta">
+              <span class="tag" :class="histDetail.execution_status === 'success' ? 'tag-success' : 'tag-danger'">
+                {{ histDetail.execution_status === 'success' ? '执行成功' : '执行失败' }}
+              </span>
+              <span v-if="histDetail.review_passed === true" class="tag tag-accent">审查通过</span>
+              <span v-else-if="histDetail.review_passed === false" class="tag tag-warn">审查未通过</span>
+              <span v-if="histDetail.user_judgment" class="tag tag-accent">人工判断：{{ histDetail.user_judgment }}</span>
+              <span class="hist-chip">耗时 <span class="tabular">{{ (histDetail.latency_ms / 1000).toFixed(2) }}s</span></span>
+              <span class="hist-chip">生成 <span class="tabular">{{ histDetail.attempts }}</span> 次</span>
+              <span class="hist-chip">RAG 召回 <span class="tabular">{{ histDetail.rag_pairs_count }}</span> 条</span>
+              <span v-if="histDetail.row_count != null" class="hist-chip">结果 <span class="tabular">{{ histDetail.row_count }}</span> 行</span>
+            </div>
+            <div v-if="histDetail.generated_sql" class="hist-detail-sql">
+              <DsSqlViewer :sql="histDetail.generated_sql" :typing="false" />
+            </div>
+            <div v-if="histPreview" class="hist-preview-wrap">
+              <div class="hist-preview-hd">
+                执行结果预览
+                <span class="meta">（留存前 {{ histPreviewRows.length }} 行）</span>
+              </div>
+              <div class="tablewrap">
+                <table class="tb">
+                  <thead>
+                    <tr>
+                      <th v-for="(h, i) in histPreviewHeaders" :key="i">{{ h }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, ri) in histPreviewRows" :key="ri">
+                      <td v-for="(cell, ci) in row" :key="ci" :class="cellClass(cell)">{{ cellText(cell) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div v-if="!histPreviewRows.length" class="qa-result-empty">无数据</div>
+              </div>
+            </div>
+            <div class="hist-detail-actions">
+              <button class="btn-sm btn-ember" type="button" @click="reask(histDetail)">再次提问</button>
+              <button class="btn-sm" type="button" :disabled="!histDetail.generated_sql" @click="copyHistorySql">复制 SQL</button>
+              <button class="btn-sm hist-del" type="button" @click="onHistDelete(histDetail)">删除</button>
+            </div>
+          </div>
+        </template>
+        <div v-else class="hist-state hist-state--idle">选择左侧会话查看 SQL 与执行结果</div>
+      </section>
     </div>
 
     <!-- 我的提问模板（简态空态：旧实现无此功能） -->
@@ -764,6 +1015,204 @@ onBeforeUnmount(() => {
   color: var(--accent);
   font-size: 12.5px;
   cursor: pointer;
+}
+
+/* 历史会话 */
+.qa-history {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 16px;
+  overflow: hidden;
+}
+.hist-list-card {
+  width: 400px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.hist-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+.hist-search {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-strong);
+  outline: none;
+}
+.hist-search:focus {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+.hist-filters {
+  display: flex;
+  gap: 6px;
+}
+.hist-filter {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--surface-1);
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.hist-filter:hover {
+  border-color: var(--line-strong);
+}
+.hist-filter.active {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.hist-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 6px 8px;
+}
+.hist-item {
+  padding: 10px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.hist-item:hover {
+  background: var(--surface-2);
+}
+.hist-item.active {
+  background: var(--accent-soft);
+}
+.hist-q {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-strong);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hist-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.hist-judge {
+  color: var(--text-2);
+}
+.hist-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line-subtle);
+}
+.hist-pager .meta {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.hist-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 24px;
+  font-size: 13px;
+  color: var(--text-3);
+  text-align: center;
+}
+.hist-state--error {
+  color: var(--danger);
+}
+.hist-state--error button {
+  border: none;
+  background: none;
+  color: var(--danger);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.hist-detail-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+.hist-detail-q {
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.hist-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.hist-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+.hist-detail-sql {
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.hist-preview-wrap {
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.hist-preview-hd {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+  background: var(--sunken);
+  border-bottom: 1px solid var(--line-subtle);
+}
+.hist-preview-hd .meta {
+  color: var(--text-3);
+}
+.hist-detail-actions {
+  display: flex;
+  gap: 8px;
+}
+.hist-del {
+  margin-left: auto;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.hist-del:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
 }
 
 /* 简态页签 */

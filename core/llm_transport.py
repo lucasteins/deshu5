@@ -220,3 +220,160 @@ def call_llm(prompt: str, user_question: str = None, max_tokens: int = 8000, thi
             if attempt < 1:
                 time.sleep(min(2 ** attempt, 8))
     raise ValueError(f"LLM 调用失败或返回内容为空: {last_error}")
+
+
+class _ToolsRejected(Exception):
+    """端点 HTTP 400 拒绝 tools 参数（模型/网关不支持 function calling）。"""
+
+
+def call_llm_tools(messages: list, tools: Optional[list] = None, max_tokens: int = 16000,
+                   thinking: Optional[bool] = True, timeout: Optional[int] = None,
+                   stream_cb=None) -> Dict:
+    """OpenAI 兼容 function calling 调用（流式优先，非流式兜底）。
+
+    返回 {'content', 'tool_calls': [{'id','name','arguments'}], 'usage', 'tools_rejected'}。
+    tool_calls 非空时 content 可为空，不视为失败。tools=None 时等同普通调用。
+    端点拒绝 tools（400）时自动去掉 tools 重试并置 tools_rejected=True，
+    调用方应退回 ```bash 文本协议。流式空闲看门狗与 call_llm 同规则。
+    """
+    from core.llm_config import current as _llm_current, build_request as _llm_build
+    cfg = _llm_current()
+    if not cfg.get('api_key'):
+        raise ValueError(f"{cfg['provider']} API Key 未配置（请在前端设置页配置）")
+    http_timeout = timeout if timeout is not None else config.LLM_TIMEOUT_FAST
+    idle_limit = getattr(config, 'LLM_STREAM_IDLE_TIMEOUT', 240)
+    url, headers, payload = _llm_build(messages, max_tokens=max_tokens, thinking=thinking, cfg=cfg)
+    tools_rejected = False
+    if tools:
+        payload['tools'] = tools
+
+    def _norm_tool_calls(msg) -> list:
+        out = []
+        for tc in (msg.get('tool_calls') or []):
+            fn = tc.get('function') or {}
+            out.append({'id': tc.get('id') or f'call_{len(out)}',
+                        'name': fn.get('name') or '',
+                        'arguments': fn.get('arguments') or ''})
+        return out
+
+    def _stream_once() -> Dict:
+        spayload = dict(payload, stream=True)
+        resp = None
+        try:
+            t0 = time.perf_counter()
+            resp = _LLM_HTTP.post(url, headers=headers, json=spayload,
+                                  timeout=http_timeout, stream=True)
+            try:
+                resp.raise_for_status()
+            except requests.exceptions.HTTPError:
+                if 'tools' in payload and resp.status_code == 400:
+                    raise _ToolsRejected()
+                raise
+            resp.encoding = 'utf-8'
+            parts = {'reasoning': [], 'content': []}
+            full_content = []
+            tool_acc = {}  # index -> {'id','name','arguments'}
+            last_flush = time.perf_counter()
+            last_delta = time.perf_counter()
+
+            def _flush(force=False):
+                nonlocal last_flush
+                now = time.perf_counter()
+                if not force and now - last_flush < 0.25:
+                    return
+                last_flush = now
+                for ph in ('reasoning', 'content'):
+                    if parts[ph]:
+                        chunk = ''.join(parts[ph])
+                        parts[ph] = []
+                        try:
+                            stream_cb(ph, chunk)
+                        except Exception:
+                            pass
+
+            for raw in resp.iter_lines(decode_unicode=True):
+                now_line = time.perf_counter()
+                if not raw:
+                    if now_line - last_delta > idle_limit:
+                        raise ValueError(f'流式响应空闲超时（{idle_limit}s 无内容增量）')
+                    continue
+                body = raw.strip()
+                if not body.startswith('data:'):
+                    if now_line - last_delta > idle_limit:
+                        raise ValueError(f'流式响应空闲超时（{idle_limit}s 无内容增量）')
+                    continue
+                body = body[5:].strip()
+                if body == '[DONE]':
+                    break
+                try:
+                    sevt = json.loads(body)
+                    delta = ((sevt.get('choices') or [{}])[0]).get('delta') or {}
+                except Exception:
+                    continue
+                rc = delta.get('reasoning_content')
+                dc = delta.get('content')
+                tc_deltas = delta.get('tool_calls') or []
+                if rc:
+                    parts['reasoning'].append(rc)
+                if dc:
+                    parts['content'].append(dc)
+                    full_content.append(dc)
+                for d in tc_deltas:
+                    acc = tool_acc.setdefault(d.get('index', 0),
+                                              {'id': '', 'name': '', 'arguments': ''})
+                    if d.get('id'):
+                        acc['id'] = d['id']
+                    fn = d.get('function') or {}
+                    if fn.get('name'):
+                        acc['name'] += fn['name']
+                    if fn.get('arguments'):
+                        acc['arguments'] += fn['arguments']
+                if rc or dc or tc_deltas:
+                    last_delta = now_line
+                if stream_cb:
+                    _flush()
+            if stream_cb:
+                _flush(force=True)
+            content = ''.join(full_content)
+            tool_calls = [tool_acc[i] for i in sorted(tool_acc)]
+            elapsed = (time.perf_counter() - t0) * 1000
+            print(f"[DEBUG] provider={cfg['provider']} model={payload['model']} tools_stream"
+                  f" content_len={len(content)} tool_calls={len(tool_calls)} elapsed={elapsed:.1f}ms",
+                  flush=True)
+            if content.strip() or tool_calls:
+                return {'content': content, 'tool_calls': tool_calls, 'usage': {}}
+            raise ValueError('流式返回内容为空')
+        finally:
+            try:
+                if resp is not None:
+                    resp.close()
+            except Exception:
+                pass
+
+    for _attempt in range(2):
+        try:
+            result = _stream_once()
+            result['tools_rejected'] = tools_rejected
+            return result
+        except _ToolsRejected:
+            print('[DEBUG] 端点拒绝 tools 参数（400），去掉 tools 重试（退回 ```bash 协议）', flush=True)
+            payload.pop('tools', None)
+            tools_rejected = True
+        except Exception as e:
+            print(f'[DEBUG] tools stream error={e}，回退非流式调用', flush=True)
+            break
+
+    try:
+        r = _LLM_HTTP.post(url, headers=headers, json=payload, timeout=http_timeout)
+        r.raise_for_status()
+        data = r.json()
+        msg = data['choices'][0]['message']
+        content = msg.get('content') or ''
+        tool_calls = _norm_tool_calls(msg)
+        if content.strip() or tool_calls:
+            return {'content': content, 'tool_calls': tool_calls,
+                    'usage': data.get('usage') or {}, 'tools_rejected': tools_rejected}
+        last_error = ValueError('返回内容为空')
+    except Exception as e:
+        last_error = e
+    raise ValueError(f'LLM 调用失败: {last_error}')

@@ -8,7 +8,7 @@
 - GET    /sessions?skill=<name>            会话列表（按 updated_at 倒序，含 message_count）
 - GET    /sessions/<sid>                   会话详情 + 全量消息
 - DELETE /sessions/<sid>                   删除会话及其消息
-- POST   /chat/stream                      SSE 流式对话（agent 循环：回复中的 ```bash 命令自动执行、结果回填后继续，至多 _MAX_AGENT_ROUNDS 轮）
+- POST   /chat/stream                      SSE 流式对话（agent 循环：优先 function calling 调 run_script 工具自动执行，端点不支持 tools 时退回 ```bash 文本协议；至多 _MAX_AGENT_ROUNDS 轮）
 - POST   /execute/stream                   SSE 流式执行白名单脚本命令（python tools/|skills/...，手动执行入口）
 """
 import json
@@ -41,8 +41,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 EXEC_TIMEOUT = int(os.environ.get('EXEC_TIMEOUT', '1800'))
 _EXEC_TAIL_CHARS = 2000   # 落库时保留的 stdout 尾部字符数
 _MAX_AGENT_ROUNDS = int(os.environ.get('SKILLCHAT_AGENT_ROUNDS', '8'))  # 对话自动执行的最大 LLM 轮数
-_REPLY_ECHO_LIMIT = 8000  # agent 循环回填上一轮回复的字符上限
-_EXEC_RESULT_LIMIT = 3000  # agent 循环单条命令结果回填字符上限
+_EXEC_RESULT_LIMIT = 3000  # tool/user 消息回填执行结果的字符上限
 # 对话轮 LLM 调用参数：综述类任务思考+正文量大，默认 8000 会被 reasoning 吃光导致空正文
 _LLM_MAX_TOKENS = int(os.environ.get('SKILLCHAT_LLM_MAX_TOKENS', '16000'))
 _LLM_TIMEOUT = int(os.environ.get('SKILLCHAT_LLM_TIMEOUT', '600'))  # 秒；空闲由流式看门狗兜底
@@ -211,26 +210,99 @@ def delete_session(sid):
 
 # ==================== 对话（SSE） ====================
 
-_EXEC_PROTOCOL = '''[执行协议]
-当用户请求需要运行脚本才能完成时，你必须在回复中给出具体可执行命令，格式为 ```bash 代码块，每行一条命令。
-只允许项目脚本命令：`python tools/xxx.py ...` 或 `python skills/<skill名>/scripts/xxx.py ...`（从项目根目录出发的相对路径），参数必须严格照 SKILL.md 文档中的用法书写，含空格的参数用双引号包裹（例如 `python tools/crawl_tjj_monthly.py --from 202607 --to 202608`）。代码块中只写命令本身，不要写注释、cd、export 等其它内容。
-你给出的命令会被系统自动执行，执行结果会回传给你；你可根据结果继续给出新命令，直到任务完成。无需执行命令时不要输出 bash 代码块（普通说明性代码请使用其他语言标注或纯文本）。'''
+_TOOL_PROTOCOL = '''[执行协议]
+需要运行脚本才能完成的任务，调用 run_script 工具执行；命令只允许项目脚本：
+`python tools/xxx.py ...` 或 `python skills/<skill名>/scripts/xxx.py ...`（项目根目录相对路径），
+参数严格照 SKILL.md 文档中的用法书写，含空格的参数用双引号包裹。
+工具会被系统自动执行，结果回传给你；你可根据结果继续调用工具，直到任务完成。
+决定继续执行时必须在同一轮直接给出工具调用，不要只描述计划；说"我将/下一步/补充检索"但不给命令会被视为任务结束。
+若工具调用不可用，改用 ```bash 代码块给出命令（每行一条，只写命令本身，不要注释、cd、export）。
+无需执行命令时直接作答，不要输出 bash 代码块（普通说明性代码请使用其他语言标注或纯文本）。'''
+
+_RUN_SCRIPT_TOOLS = [{
+    'type': 'function',
+    'function': {
+        'name': 'run_script',
+        'description': '在项目根目录执行白名单 Python 脚本，返回 stdout 尾部与退出码',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'command': {
+                    'type': 'string',
+                    'description': '完整命令行：python tools/xxx.py ... 或 '
+                                   'python skills/<skill名>/scripts/xxx.py ...，例如 '
+                                   'python tools/crawl_tjj_monthly.py --from 202607 --to 202608',
+                },
+            },
+            'required': ['command'],
+        },
+    },
+}]
 
 
-def _build_continuation(reply: str, results: list) -> str:
-    """agent 循环下一轮 prompt 的增量：上轮回复（截断）+ 各命令执行结果（截断）+ 继续指令。"""
-    reply = (reply or '').strip()
-    if len(reply) > _REPLY_ECHO_LIMIT:
-        reply = reply[:_REPLY_ECHO_LIMIT] + '\n…（回复过长已截断）'
-    parts = ['', '[你上一轮的回复]', reply, '', '[命令自动执行结果]']
+def _list_available_scripts() -> str:
+    """可执行脚本清单（注入 system prompt，防止模型编造不存在的脚本名）。"""
+    items = []
+    for pat in ('tools/*.py', 'skills/*/scripts/*.py'):
+        for p in sorted(PROJECT_ROOT.glob(pat)):
+            if p.name.startswith('_'):
+                continue
+            items.append(str(p.relative_to(PROJECT_ROOT)).replace('\\', '/'))
+    return '\n'.join(f'- {s}' for s in items) or '（无）'
+
+
+def _build_sys_prompt(skill_body: str) -> str:
+    return (skill_body.strip()
+            + '\n\n请以该 Skill 的能力专家身份回答；与 Skill 无关的问题礼貌说明并引导回 Skill 主题。\n\n'
+            + _TOOL_PROTOCOL
+            + '\n\n[可用脚本清单]\n' + _list_available_scripts()
+            + '\n只允许调用以上已存在的脚本，禁止编造脚本名；读取项目内文本资料'
+              '（如 kjgl研究谋划/kjgl_base.json）用 `python tools/show_file.py <相对路径>`；'
+              '暂存审查对象原文等短文本用 `python tools/save_text.py <文件名.md> <内容>`'
+              '（保存到 kjgl研究谋划/inbox/）。')
+
+
+def _build_user_prompt(history: list, message: str) -> str:
+    """[对话历史]（含 exec 摘要行）+ [当前用户消息] 拼用户轮内容。"""
+    lines = ['[对话历史]']
+    if history:
+        for role, content in history:
+            if role == 'user':
+                lines.append(f'用户: {content}')
+            elif role == 'assistant':
+                lines.append(f'助手: {content}')
+            else:  # exec 摘要行原样注入
+                lines.append(content)
+    else:
+        lines.append('（无）')
+    lines += ['', '[当前用户消息]', message]
+    return '\n'.join(lines)
+
+
+def _tool_result_text(exec_content: str) -> str:
+    """tool 消息正文：截断到 _EXEC_RESULT_LIMIT。"""
+    r = (exec_content or '').strip()
+    if len(r) > _EXEC_RESULT_LIMIT:
+        r = r[:_EXEC_RESULT_LIMIT] + '\n…（输出过长已截断）'
+    return r
+
+
+def _build_legacy_continuation(results: list) -> str:
+    """```bash 文本协议兜底路径的执行结果回填（user 消息）。"""
+    parts = ['[命令自动执行结果]']
     for r in results:
-        r = (r or '').strip()
-        if len(r) > _EXEC_RESULT_LIMIT:
-            r = r[:_EXEC_RESULT_LIMIT] + '\n…（输出过长已截断）'
-        parts.append(r)
-    parts += ['', '请根据以上执行结果继续：任务未完成且仍需运行脚本时，按执行协议给出新的 '
+        parts.append(_tool_result_text(r))
+    parts += ['', '请根据以上执行结果继续：任务未完成且仍需运行脚本时，继续调用 run_script 工具或给出 '
                   '```bash 命令；任务已完成或无需再执行时，直接给出最终答复，不要再输出 bash 代码块。']
     return '\n'.join(parts)
+
+
+# 模型"光说不练"检测：宣称要继续执行却没给工具调用时，追问一次（每次请求最多 _MAX_NUDGES 次）
+_INTENT_RE = re.compile(r'(我将|我会|让我|接下来|下一步|下面我|然后我|补充.{0,8}检索|'
+                        r'继续.{0,8}(检索|执行|运行|生成)|再跑|重新(检索|执行|运行)|现在(执行|运行|检索))')
+_MAX_NUDGES = 2
+_NUDGE_PROMPT = ('你刚才表示要继续执行，但本轮没有给出任何工具调用。如果任务尚未完成，'
+                 '请立即调用 run_script 工具执行；如果任务已完成，请直接给出最终答复。')
 
 
 def _exec_summary(content: str) -> str:
@@ -275,25 +347,6 @@ def _trim_history(rows) -> list:
     return picked
 
 
-def _build_prompt(skill_body: str, history: list, message: str) -> str:
-    """[Skill 文档] + [对话历史] + [当前用户消息] 拼单 prompt（call_llm 单 prompt 通道）。"""
-    lines = ['[Skill 文档]', skill_body.strip(), '', '[对话历史]']
-    if history:
-        for role, content in history:
-            if role == 'user':
-                lines.append(f'用户: {content}')
-            elif role == 'assistant':
-                lines.append(f'助手: {content}')
-            else:  # exec 摘要行原样注入
-                lines.append(content)
-    else:
-        lines.append('（无）')
-    lines += ['', '[当前用户消息]', message, '',
-              '请以该 Skill 的能力专家身份回答；与 Skill 无关的问题礼貌说明并引导回 Skill 主题。',
-              '', _EXEC_PROTOCOL]
-    return '\n'.join(lines)
-
-
 @bp.route('/chat/stream', methods=['POST'])
 def chat_stream():
     """SSE 帧：{assistant_start} 每轮开始 / {thinking:chunk} / {content:chunk} 增量 /
@@ -323,7 +376,8 @@ def chat_stream():
                 ' WHERE session_id = ? ORDER BY id DESC LIMIT ?',
                 (session_id, _HISTORY_FETCH)).fetchall()
         history = _trim_history(rows)
-        prompt = _build_prompt(skills_loader.load_skill_body(skill), history, message)
+        sys_prompt = _build_sys_prompt(skills_loader.load_skill_body(skill))
+        user_prompt = _build_user_prompt(history, message)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -331,7 +385,7 @@ def chat_stream():
 
     def worker():
         try:
-            from core.llm_transport import call_llm
+            from core.llm_transport import call_llm_tools
 
             def persist_message(role, content, usage=None):
                 now = datetime.now().isoformat()
@@ -359,27 +413,91 @@ def chat_stream():
                              (now, session_id))
                 conn.commit()
 
-            # agent 循环：LLM 回复 → 提取 ```bash 命令 → 自动执行 → 结果回填 → LLM 继续
-            continuation = ''
+            # agent 循环：优先原生 function calling（run_script 工具）；
+            # 端点不支持 tools 时自动退回 ```bash 文本协议（extract_exec_commands 提取）
+            messages = [{'role': 'system', 'content': sys_prompt},
+                        {'role': 'user', 'content': user_prompt}]
+            use_tools = True
+            seen_commands = set()  # 同一请求内已执行过的命令（去重防死循环）
+            nudges = 0             # "光说不练"追问次数
             content = ''
             usage = {}
             for round_no in range(_MAX_AGENT_ROUNDS):
                 events.put({'assistant_start': True})
-                resp = call_llm(
-                    prompt + continuation, thinking=True, stream_cb=lambda phase, chunk: events.put(
-                        {'thinking': chunk} if phase == 'reasoning' else {'content': chunk}),
-                    max_tokens=_LLM_MAX_TOKENS, timeout=_LLM_TIMEOUT)
+                resp = call_llm_tools(
+                    messages, tools=_RUN_SCRIPT_TOOLS if use_tools else None,
+                    thinking=True, max_tokens=_LLM_MAX_TOKENS, timeout=_LLM_TIMEOUT,
+                    stream_cb=lambda phase, chunk: events.put(
+                        {'thinking': chunk} if phase == 'reasoning' else {'content': chunk}))
+                if resp.get('tools_rejected'):
+                    use_tools = False
                 content = resp.get('content') or ''
                 usage = resp.get('usage') or {}
-                persist_message('assistant', content, usage)
-                commands = extract_exec_commands(content)
-                if not commands or round_no >= _MAX_AGENT_ROUNDS - 1:
+                if content.strip():
+                    persist_message('assistant', content, usage)
+                tool_calls = resp.get('tool_calls') or []
+                amsg = {'role': 'assistant', 'content': content or None}
+                if tool_calls:
+                    amsg['tool_calls'] = [
+                        {'id': tc['id'], 'type': 'function',
+                         'function': {'name': tc['name'], 'arguments': tc['arguments']}}
+                        for tc in tool_calls]
+                messages.append(amsg)
+
+                # 本轮要执行的命令：工具调用优先，文本 ```bash 兜底
+                tasks = []  # (tool_call_id | None, command)
+                for tc in tool_calls:
+                    if tc['name'] != 'run_script':
+                        tasks.append((tc['id'], ''))
+                        continue
+                    try:
+                        args = json.loads(tc['arguments'] or '{}')
+                    except Exception:
+                        args = {}
+                    tasks.append((tc['id'], (args.get('command') or '').strip()))
+                if not tasks:
+                    for cmd in extract_exec_commands(content):
+                        tasks.append((None, cmd))
+                if not tasks and round_no < _MAX_AGENT_ROUNDS - 1 and nudges < _MAX_NUDGES \
+                        and _INTENT_RE.search(content):
+                    # 模型宣称要继续执行但没给工具调用：追问让它立即行动或给出最终答复
+                    nudges += 1
+                    messages.append({'role': 'user', 'content': _NUDGE_PROMPT})
+                    continue
+                if not tasks or round_no >= _MAX_AGENT_ROUNDS - 1:
+                    if tasks and not content.strip():
+                        # 末轮仍想执行但轮数耗尽：给出收尾说明，避免空气泡
+                        content = ('（已达到最大自动执行轮数，任务未完全完成。以上执行结果可供参考，'
+                                   '你可以继续追问让我接着推进。）')
+                        persist_message('assistant', content, usage)
                     break
-                results = []
-                for cmd in commands:
+
+                legacy_results = []
+                for tool_call_id, cmd in tasks:
+                    if not cmd:
+                        if tool_call_id:
+                            messages.append({
+                                'role': 'tool', 'tool_call_id': tool_call_id,
+                                'content': '工具参数错误：缺少 command 参数或不支持的工具名'})
+                        continue
+                    if cmd in seen_commands:
+                        # 同一请求内重复命令不再执行，直接提示复用已有结果（防死循环空转）
+                        result = f'$ {cmd}\n[跳过]\n该命令在本次任务中已执行过，结果不变，请基于已有结果继续。'
+                        if tool_call_id:
+                            messages.append({'role': 'tool', 'tool_call_id': tool_call_id,
+                                             'content': result})
+                        else:
+                            legacy_results.append(result)
+                        continue
+                    seen_commands.add(cmd)
                     lock = _acquire_exec_lock(session_id)
                     if lock is None:
-                        results.append(f'$ {cmd}\n[exit -1]\n该会话有命令正在执行，本条跳过自动执行')
+                        result = f'$ {cmd}\n[exit -1]\n该会话有命令正在执行，本条跳过自动执行'
+                        if tool_call_id:
+                            messages.append({'role': 'tool', 'tool_call_id': tool_call_id,
+                                             'content': result})
+                        else:
+                            legacy_results.append(result)
                         continue
                     try:
                         events.put({'exec_start': cmd, 'auto': True})
@@ -389,9 +507,14 @@ def chat_stream():
                                     'message_id': message_id, 'auto': True})
                     finally:
                         lock.release()
-                    results.append(exec_content)
-                # 只保留最近一轮的回复+结果回填（累加会让 prompt 随轮数无界膨胀、LLM 越调越慢）
-                continuation = _build_continuation(content, results)
+                    if tool_call_id:
+                        messages.append({'role': 'tool', 'tool_call_id': tool_call_id,
+                                         'content': _tool_result_text(exec_content)})
+                    else:
+                        legacy_results.append(exec_content)
+                if legacy_results:
+                    messages.append({'role': 'user',
+                                     'content': _build_legacy_continuation(legacy_results)})
             events.put({'done': True, 'result': {'content': content, 'usage': usage}})
         except Exception as e:
             import traceback

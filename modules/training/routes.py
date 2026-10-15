@@ -144,6 +144,7 @@ def _perform_generate_sql(user_question, no_reference=False, request_mode='qa', 
                     _record_generation(
                         session_id=session_id,
                         business_question=user_question,
+                        request_mode=request_mode,
                         generated_sql=failed_sql,
                         generation_mode=gen_result.get('generation_mode'),
                         retrieved_pairs=json.dumps(retrieved_pairs, ensure_ascii=False),
@@ -209,6 +210,7 @@ def _perform_generate_sql(user_question, no_reference=False, request_mode='qa', 
                 _record_generation(
                     session_id=session_id,
                     business_question=user_question,
+                    request_mode=request_mode,
                     generated_sql=final_sql,
                     generation_mode=gen_result.get('generation_mode'),
                     retrieved_pairs=json.dumps(retrieved_pairs, ensure_ascii=False),
@@ -279,6 +281,7 @@ def _perform_generate_sql(user_question, no_reference=False, request_mode='qa', 
             log_id = _record_generation(
                 session_id=session_id,
                 business_question=user_question,
+                request_mode=request_mode,
                 generated_sql=final_sql,
                 generation_mode=gen_result.get('generation_mode'),
                 retrieved_pairs=json.dumps(retrieved_pairs, ensure_ascii=False),
@@ -394,18 +397,34 @@ def _record_generation(**kwargs) -> int:
     except Exception:
         pass
 
+    # 结果预览落库（历史会话回看用）：只留表头 + 前 20 行，截断防爆表
+    result_preview = ''
+    try:
+        exec_obj = json.loads(kwargs.get('execution_result', '{}'))
+        if exec_obj.get('success'):
+            preview = {
+                'success': True,
+                'headers': exec_obj.get('headers', []),
+                'rows': (exec_obj.get('rows') or [])[:20],
+                'row_count': exec_obj.get('row_count', 0),
+            }
+            result_preview = json.dumps(preview, ensure_ascii=False)[:60000]
+    except Exception:
+        pass
+
     with db_manager.connect_log() as conn:
         cursor = conn.execute('''
             INSERT INTO generation_logs (
-                session_id, user_question, generated_sql,
+                session_id, user_question, request_mode, generated_sql,
                 generation_mode,
                 rag_pairs_count, review_passed, review_issues,
-                execution_status, row_count, post_execution_audit,
+                execution_status, row_count, result_preview, post_execution_audit,
                 attempts, latency_ms, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             kwargs['session_id'],
             kwargs['business_question'],
+            kwargs.get('request_mode'),
             kwargs['generated_sql'],
             kwargs.get('generation_mode'),
             rag_count,
@@ -413,6 +432,7 @@ def _record_generation(**kwargs) -> int:
             review_issues,
             execution_status,
             row_count,
+            result_preview,
             post_execution_audit,
             kwargs['attempts'],
             kwargs['duration_ms'],
@@ -486,6 +506,133 @@ def generate_sql_stream():
 
     return Response(stream_with_context(stream()), mimetype='text/event-stream',
                     headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+
+# ==================== 智能问答 · 历史会话 API ====================
+# 数据源为日志库 generation_logs（每次生成都会落一条），request_mode 区分入口：
+# qa=智能问答 / training=训练模式 / sqllab=SQL 查询助手；存量老行 request_mode 为 NULL，
+# 当时尚无模式区分，统一按 qa 归口展示。
+
+_QA_HISTORY_MODE_COND = "(request_mode = 'qa' OR request_mode IS NULL)"
+
+
+@bp.route('/api/qa-history')
+def get_qa_history():
+    """历史会话分页列表（智能问答页签）。支持 q 关键词（匹配问题）与 status 过滤。"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
+        keyword = (request.args.get('q') or '').strip()
+        status = (request.args.get('status') or '').strip()  # success | failed | ''
+        offset = (page - 1) * per_page
+
+        conditions = [_QA_HISTORY_MODE_COND]
+        params = []
+        if keyword:
+            conditions.append('user_question LIKE ?')
+            params.append(f'%{keyword}%')
+        if status in ('success', 'failed'):
+            conditions.append('execution_status = ?')
+            params.append(status)
+        where = 'WHERE ' + ' AND '.join(conditions)
+
+        with db_manager.connect_log() as conn:
+            rows = conn.execute(
+                f'''SELECT id, user_question, execution_status, row_count,
+                           attempts, latency_ms, review_passed, user_judgment, created_at
+                    FROM generation_logs {where}
+                    ORDER BY id DESC LIMIT ? OFFSET ?''',
+                (*params, per_page, offset)
+            ).fetchall()
+            total = conn.execute(
+                f'SELECT COUNT(*) FROM generation_logs {where}', params
+            ).fetchone()[0]
+
+        items = [{
+            'id': r[0],
+            'question': r[1] or '',
+            'execution_status': r[2] or '',
+            'row_count': r[3],
+            'attempts': r[4] or 1,
+            'latency_ms': r[5] or 0,
+            'review_passed': bool(r[6]) if r[6] is not None else None,
+            'user_judgment': r[7] or '',
+            'created_at': str(r[8]) if r[8] else '',
+        } for r in rows]
+
+        return jsonify({'success': True, 'total': total, 'page': page, 'per_page': per_page, 'items': items})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/qa-history/<int:log_id>')
+def get_qa_history_detail(log_id):
+    """单条历史会话详情：问题 + 生成 SQL + 执行结果预览（若已落库）+ 过程指标。"""
+    try:
+        with db_manager.connect_log() as conn:
+            row = conn.execute(
+                f'''SELECT id, session_id, user_question, generated_sql, generation_mode,
+                           execution_status, row_count, result_preview,
+                           attempts, latency_ms, rag_pairs_count,
+                           review_passed, review_issues, post_execution_audit,
+                           user_judgment, created_at
+                    FROM generation_logs
+                    WHERE id = ? AND {_QA_HISTORY_MODE_COND}''',
+                (log_id,)
+            ).fetchone()
+
+        if not row:
+            return jsonify({'success': False, 'error': '历史会话不存在'}), 404
+
+        result_preview = None
+        if row[7]:
+            try:
+                result_preview = json.loads(row[7])
+            except Exception:
+                result_preview = None
+
+        return jsonify({
+            'success': True,
+            'item': {
+                'id': row[0],
+                'session_id': row[1] or '',
+                'question': row[2] or '',
+                'generated_sql': row[3] or '',
+                'generation_mode': row[4] or '',
+                'execution_status': row[5] or '',
+                'row_count': row[6],
+                'result_preview': result_preview,
+                'attempts': row[8] or 1,
+                'latency_ms': row[9] or 0,
+                'rag_pairs_count': row[10] or 0,
+                'review_passed': bool(row[11]) if row[11] is not None else None,
+                'review_issues': row[12] or '',
+                'post_execution_audit': row[13] or '',
+                'user_judgment': row[14] or '',
+                'created_at': str(row[15]) if row[15] else '',
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/qa-history/<int:log_id>', methods=['DELETE'])
+def delete_qa_history(log_id):
+    """删除一条历史会话（仅删日志记录，不影响问答对库）。"""
+    try:
+        with db_manager.connect_log() as conn:
+            cursor = conn.execute(
+                f'DELETE FROM generation_logs WHERE id = ? AND {_QA_HISTORY_MODE_COND}',
+                (log_id,)
+            )
+            conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({'success': False, 'error': '历史会话不存在'}), 404
+
+        return jsonify({'success': True, 'message': '历史会话已删除'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ==================== 训练模式 API ====================

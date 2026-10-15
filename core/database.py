@@ -281,6 +281,7 @@ def init_generation_logs_table():
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 session_id VARCHAR(64),
                 user_question TEXT,
+                request_mode VARCHAR(16),
                 generation_mode VARCHAR(32),
                 tables_involved TEXT,
                 generation_strategy VARCHAR(32),
@@ -292,6 +293,7 @@ def init_generation_logs_table():
                 review_issues TEXT,
                 execution_status VARCHAR(16),
                 row_count INT,
+                result_preview MEDIUMTEXT,
                 post_execution_audit TEXT,
                 attempts INT DEFAULT 1,
                 latency_ms INT,
@@ -317,6 +319,8 @@ def init_generation_logs_table():
                 pass
         _ensure_columns(conn, 'generation_logs', {
             'user_feedback': 'TEXT',
+            'request_mode': 'VARCHAR(16)',
+            'result_preview': 'MEDIUMTEXT',
             'generation_mode': 'VARCHAR(32)',
             'post_execution_audit': 'TEXT',
             'table_choice_correct': 'TINYINT(1)',

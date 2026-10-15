@@ -7,9 +7,9 @@
  *       消息流（user 右 / assistant 左气泡，assistant 用 renderMarkdown 渲染，
  *       流式期间 DsThinkingPanel 思考流 + 正文增量，useAutoScroll 跟底）、
  *       底部输入框（Enter 发送 / Shift+Enter 换行，流式中禁用发送）。
- * 命令执行：后端 agent 循环会自动执行回复中 ```bash 块里过白名单的命令并回填结果
- * （{assistant_start} 新一轮气泡 / {exec_start} 插流式执行卡 / {exec_out} 输出增量 /
- * {exec_done} 封板）；assistant 正文里的可执行命令仍渲染「可执行命令」条，
+ * 命令执行：后端 agent 循环优先用 function calling（run_script 工具）自动执行脚本并回填结果，
+ * 端点不支持 tools 时退回提取 ```bash 块（{assistant_start} 新一轮气泡 / {exec_start} 插流式执行卡 /
+ * {exec_out} 输出增量 / {exec_done} 封板）；assistant 正文里的可执行命令仍渲染「可执行命令」条，
  * 点击手动执行走独立 useSSE 实例 POST /api/skillchat/execute/stream；
  * 同一时刻只允许一个手动执行。
  * 历史 role='exec' 消息渲染为只读执行结果卡（默认折叠）。

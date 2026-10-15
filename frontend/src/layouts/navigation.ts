@@ -90,8 +90,8 @@ export const NAV_GROUPS: NavGroup[] = [
         phase: 'F2.1',
         summary: '流式叙事首秀（流程轨 / 思考窗口 / 打字机 / SQL 着色），规划于 F2.1 落地。',
         tabs: [
-          { key: 'chat', label: '对话', count: '1' },
-          { key: 'history', label: '历史会话', count: '84' },
+          { key: 'chat', label: '对话' },
+          { key: 'history', label: '历史会话' },
           { key: 'templates', label: '我的提问模板' },
         ],
         load: () => import('@/views/qa/QaView.vue'),

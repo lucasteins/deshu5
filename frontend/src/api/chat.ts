@@ -82,3 +82,57 @@ export function saveQa(payload: {
 }): Promise<{ success: boolean; message?: string }> {
   return api.post<{ success: boolean; message?: string }>('/save-qa', payload)
 }
+
+/* ==================== 历史会话（/api/qa-history，数据源 generation_logs） ==================== */
+
+/** 历史会话列表项 */
+export interface QaHistoryItem {
+  id: number
+  question: string
+  execution_status: string
+  row_count: number | null
+  attempts: number
+  latency_ms: number
+  review_passed: boolean | null
+  user_judgment: string
+  created_at: string
+}
+
+/** 历史会话详情（含生成 SQL 与执行结果预览） */
+export interface QaHistoryDetail extends QaHistoryItem {
+  session_id: string
+  generated_sql: string
+  generation_mode: string
+  result_preview: ResultPreview | null
+  rag_pairs_count: number
+  review_issues: string
+  post_execution_audit: string
+}
+
+export interface QaHistoryListResult {
+  success: boolean
+  total: number
+  page: number
+  per_page: number
+  items: QaHistoryItem[]
+}
+
+/** 历史会话分页列表（q=问题关键词，status=success/failed） */
+export function listQaHistory(params: {
+  page?: number
+  per_page?: number
+  q?: string
+  status?: string
+}): Promise<QaHistoryListResult> {
+  return api.get<QaHistoryListResult>('/qa-history', { ...params })
+}
+
+/** 单条历史会话详情 */
+export function getQaHistoryDetail(id: number): Promise<{ success: boolean; item: QaHistoryDetail }> {
+  return api.get<{ success: boolean; item: QaHistoryDetail }>(`/qa-history/${id}`)
+}
+
+/** 删除一条历史会话 */
+export function deleteQaHistory(id: number): Promise<{ success: boolean; message?: string }> {
+  return api.delete<{ success: boolean; message?: string }>(`/qa-history/${id}`)
+}

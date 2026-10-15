@@ -42,6 +42,15 @@ PROFILES = {
         'log': os.environ.get('KJGL_DB_LOG', 'kjgl01_log'),
         'ontology': os.environ.get('KJGL_DB_ONTOLOGY', 'kjgl01_ontology'),
     },
+    # 数据管理库 sjgl：运维运营指标梳理成果（tools/bootstrap_sjgl.py 引导建库建表+
+    # 样例数据装载，tools/import_sjgl_material.py 完成素材提资导入），四库独立
+    'sjgl': {
+        'label': '数据管理库 sjgl',
+        'business': os.environ.get('SJGL_DB_BUSINESS', 'sjgl'),
+        'governance': os.environ.get('SJGL_DB_GOVERNANCE', 'sjgl_governance'),
+        'log': os.environ.get('SJGL_DB_LOG', 'sjgl_log'),
+        'ontology': os.environ.get('SJGL_DB_ONTOLOGY', 'sjgl_ontology'),
+    },
 }
 
 _STATE_PATH = Path(__file__).resolve().parent.parent / 'db_profile.json'
